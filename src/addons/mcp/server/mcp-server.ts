@@ -100,7 +100,7 @@ function createOrbitMcpServer(user:OrbitUser,scopes:Set<string>) {
 export async function handleMcpAddonRequest(request: Request): Promise<Response> {
 	let identity;
 	try { identity=await authenticateMcpAccessToken(request); }
-	catch(error:any){return new Response(JSON.stringify({error:String(error?.message||'Authentication required')}),{status:Number(error?.status||401),headers:{'content-type':'application/json','www-authenticate':'Bearer resource_metadata="https://orbitfsmcp.vercel.app/.well-known/oauth-protected-resource"'}});}
+	catch(error:any){return new Response(JSON.stringify({error:String(error?.message||'Authentication required')}),{status:Number(error?.status||401),headers:{'content-type':'application/json','www-authenticate':'Bearer resource_metadata="https://orbitconvert-mcp-addon.vercel.app/.well-known/oauth-protected-resource"'}});}
 	const server=createOrbitMcpServer(identity.user as OrbitUser,identity.scopes);
 	const transport=new WebStandardStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
 	await server.connect(transport);
