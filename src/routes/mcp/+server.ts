@@ -1,11 +1,11 @@
 ﻿import type { RequestHandler } from './$types';
 import { handleMcpAddonRequest } from '../../addons/mcp/server/mcp-server';
-import { assertMcpEngineAccepting, noteMcpRequest } from '$lib/server/mcp-engine';
+import { assertAddonEngineAccepting, noteAddonRequest } from '$lib/server/addon-engine';
 
 async function handle(request: Request) {
 	try {
-		await assertMcpEngineAccepting();
-		void noteMcpRequest();
+		await assertAddonEngineAccepting('mcp');
+		void noteAddonRequest('mcp');
 		return await handleMcpAddonRequest(request);
 	} catch (error:any) {
 		return new Response(JSON.stringify({ error: String(error?.message || 'MCP unavailable'), code: String(error?.code || 'MCP_UNAVAILABLE') }), {
