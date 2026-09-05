@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { getAddonEngineState,setAddonEngineMode } from '$lib/server/addon-engine';
 
 function authorized(request:Request){
-	const expected=String(env.ORBITFS_ENGINE_SECRET||'').trim();
+	const expected=String(env.ORBITFS_ENGINE_SECRET||env.ORBITFS_DB_SECRET||'').trim();
 	const actual=String(request.headers.get('x-orbitfs-engine-secret')||'');
 	return Boolean(expected)&&actual===expected;
 }
