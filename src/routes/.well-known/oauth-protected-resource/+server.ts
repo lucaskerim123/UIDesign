@@ -7,6 +7,6 @@ export function GET({ url }: any) {
     authorization_servers: [OAUTH_ISSUER],
     bearer_methods_supported: ['header'],
     scopes_supported: ['orbitfs:read','orbitfs:write','offline_access'],
-    resource_documentation: 'https://orbitfsproject.vercel.app/admin/mcp/settings'
+    resource_documentation: 'https://orbitconvert.vercel.app/admin/mcp/settings'
   });
 }
