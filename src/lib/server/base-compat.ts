@@ -192,6 +192,7 @@ export async function listEntries(workspaceId: string, subpath: string) {
 		.filter((entry) => dirname(entry.path) === clean)
 		.map((entry) => ({
 			id: entry.id,
+			path: entry.path,
 			name: entry.name,
 			type: entry.kind === 'folder' ? 'dir' : 'file',
 			size: Number(entry.size_bytes || 0),
