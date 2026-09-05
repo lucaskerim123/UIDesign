@@ -1,9 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
-	export let data:any;
-	export let form:any;
-	const submit = () => enhance(() => async ({ update }) => { await update(); await invalidateAll(); });
+	let { data, form } = $props();
 </script>
 
 <svelte:head><title>OrbitFS MCP Engine</title><meta name="viewport" content="width=device-width,initial-scale=1" /></svelte:head>
@@ -27,18 +23,18 @@
 		<section>
 			<div class="section-title"><div><h2>Engine controls</h2><p>These controls change the real MCP request gate stored in Supabase.</p></div><div class="user">{data.user.username} · {data.user.role}</div></div>
 			<div class="controls">
-				<form method="POST" action="?/control" use:submit><input type="hidden" name="mode" value="running"><button class:active={data.engine.mode==='running'}>Run</button></form>
-				<form method="POST" action="?/control" use:submit><input type="hidden" name="mode" value="standby"><button class:active={data.engine.mode==='standby'}>Standby</button></form>
-				<form method="POST" action="?/control" use:submit><input type="hidden" name="mode" value="stopped"><button class="danger" class:active={data.engine.mode==='stopped'}>Stop</button></form>
-				<form method="POST" action="?/control" use:submit><input type="hidden" name="mode" value="restart"><button>Restart</button></form>
+				<form method="POST" action="?/control"><input type="hidden" name="mode" value="running"><button class:active={data.engine.mode==='running'}>Run</button></form>
+				<form method="POST" action="?/control"><input type="hidden" name="mode" value="standby"><button class:active={data.engine.mode==='standby'}>Standby</button></form>
+				<form method="POST" action="?/control"><input type="hidden" name="mode" value="stopped"><button class="danger" class:active={data.engine.mode==='stopped'}>Stop</button></form>
+				<form method="POST" action="?/control"><input type="hidden" name="mode" value="restart"><button>Restart</button></form>
 			</div>
 			{#if form?.controlError}<div class="error">{form.controlError}</div>{/if}
-			<form class="logout" method="POST" action="?/logout" use:submit><button>Sign out</button></form>
+			<form class="logout" method="POST" action="?/logout"><button>Sign out</button></form>
 		</section>
 	{:else}
 		<section>
 			<h2>Admin access</h2><p>Sign in with an OrbitFS owner/admin account to control the MCP engine.</p>
-			<form class="login" method="POST" action="?/login" use:submit>
+			<form class="login" method="POST" action="?/login">
 				<input name="identity" placeholder="Username or email" autocomplete="username" required>
 				<input name="credential" type="password" placeholder="Password / PIN" autocomplete="current-password" required>
 				<button>Sign in</button>
