@@ -2,6 +2,22 @@ import { requireAdmin } from '$lib/server/auth';
 import { getEngineHubEngine } from '$lib/server/engine-hub';
 import { getSupabaseAdmin } from '$lib/server/supabase';
 
+const SENSITIVE_KEY = /(token|secret|password|authorization|license[_-]?key|entitlement|credential)/i;
+
+function safeDetail(value: any, depth = 0): any {
+	if (depth > 3) return '[nested data]';
+	if (value === null || value === undefined || typeof value === 'boolean' || typeof value === 'number') return value;
+	if (typeof value === 'string') return value.length > 1000 ? `${value.slice(0,1000)}…` : value;
+	if (Array.isArray(value)) return value.slice(0,25).map((item)=>safeDetail(item, depth + 1));
+	if (typeof value === 'object') {
+		return Object.fromEntries(Object.entries(value).slice(0,50).map(([key,item])=>[
+			key,
+			SENSITIVE_KEY.test(key) ? '[redacted]' : safeDetail(item, depth + 1)
+		]));
+	}
+	return String(value);
+}
+
 export async function load({ cookies, params }) {
 	const user = await requireAdmin(cookies);
 	const engine = await getEngineHubEngine(params.engine);
@@ -19,7 +35,7 @@ export async function load({ cookies, params }) {
 			type: row.event_type,
 			scope: row.scope_id,
 			actor: row.actor_user_id,
-			detail: row.details || {},
+			detail: safeDetail(row.details || {}),
 			createdAt: row.created_at
 		}));
 	} else {
@@ -34,7 +50,7 @@ export async function load({ cookies, params }) {
 			type: row.action,
 			scope: row.workspace_id,
 			actor: row.actor_user_id,
-			detail: row.detail || {},
+			detail: safeDetail(row.detail || {}),
 			createdAt: row.created_at
 		}));
 	}
