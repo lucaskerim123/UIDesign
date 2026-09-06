@@ -5,6 +5,7 @@ import { ensureInstallationIdentity, getPanelLicenseSummary } from '$lib/server/
 
 export type EngineSetupState = 'not_started' | 'required' | 'in_progress' | 'complete' | 'error';
 
+const PANEL_URL = 'https://orbitfs.vercel.app';
 const COMPONENTS: Record<string, string> = {
 	mcp: 'orbitfs_mcp',
 	apex: 'orbitfs_apex',
@@ -52,16 +53,13 @@ function normalizePanelUrl(value: unknown) {
 		if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error();
 		if (host === 'localhost' || host === '127.0.0.1' || host === '::1') throw new Error();
 		const normalized = `${url.protocol}//${url.host}`;
-		const configured = String(env.ORBITFS_PANEL_URL || '').trim();
-		if (configured) {
-			const configuredUrl = new URL(configured);
-			const expected = `${configuredUrl.protocol}//${configuredUrl.host}`;
-			if (normalized !== expected) {
-				throw Object.assign(new Error('Panel URL does not match the configured OrbitFS Panel'), {
-					status: 409,
-					code: 'PANEL_URL_MISMATCH'
-				});
-			}
+		const configuredUrl = new URL(String(env.ORBITFS_PANEL_URL || PANEL_URL).trim());
+		const expected = `${configuredUrl.protocol}//${configuredUrl.host}`;
+		if (normalized !== expected) {
+			throw Object.assign(new Error('Panel URL does not match the configured OrbitFS Panel'), {
+				status: 409,
+				code: 'PANEL_URL_MISMATCH'
+			});
 		}
 		return normalized;
 	} catch (error: any) {
@@ -91,11 +89,11 @@ function objectValue(value: unknown): Record<string, any> {
 
 function setupStateFor(row: any): EngineSetupState {
 	const runtime = objectValue(row.runtime);
-	const candidate = String(runtime.setupState || '');
+	const config = objectValue(row.config);
+	const setup = objectValue(config.engineSetup);
+	const candidate = String(runtime.setupState || setup.state || '');
 	if (['not_started', 'required', 'in_progress', 'complete', 'error'].includes(candidate)) return candidate as EngineSetupState;
-	if (row.configured === true) return 'complete';
-	if (row.attached === true) return 'required';
-	return 'not_started';
+	return row.attached === true ? 'required' : 'not_started';
 }
 
 async function licenseStatus(engineId: string, row: any) {
@@ -114,14 +112,15 @@ export async function getEngineHostLink(engineIdInput: unknown) {
 	const runtime = objectValue(row.runtime);
 	const link = objectValue(config.engineHostLink);
 	const license = await licenseStatus(engineId, row);
+	const setupState = setupStateFor(row);
 	return {
 		engineId,
 		name: row.name,
 		installed: row.installed === true,
 		attached: row.attached === true,
-		configured: row.configured === true,
+		configured: setupState === 'complete',
 		available: row.available !== false,
-		setupState: setupStateFor(row),
+		setupState,
 		setupVersion: Number(runtime.setupVersion || 1),
 		engineState: String(runtime.engineMode || 'standby'),
 		linked: runtime.engineHostLinked === true && link.state === 'linked',
@@ -145,6 +144,12 @@ export async function getEngineHostLink(engineIdInput: unknown) {
 export async function pairEngineHost(input: Record<string, any>) {
 	const engineId = normalizeEngineId(input.engineId || input.engine_id);
 	const row = await getEngineRow(engineId);
+	if (row.installed !== true) {
+		throw Object.assign(new Error(`OrbitFS ${engineId} must be installed from Panel before it can be attached`), {
+			status: 409,
+			code: 'ENGINE_NOT_INSTALLED'
+		});
+	}
 	const installationId = String(input.installationId || input.installation_id || '').trim();
 	const canonicalInstallationId = await ensureInstallationIdentity();
 	if (!installationId || installationId !== canonicalInstallationId) {
@@ -188,6 +193,7 @@ export async function pairEngineHost(input: Record<string, any>) {
 	const config = objectValue(row.config);
 	const runtime = objectValue(row.runtime);
 	const previousLink = objectValue(config.engineHostLink);
+	const previousSetupState = setupStateFor(row);
 	const now = new Date().toISOString();
 	const attached = input.attached !== false;
 	const link = {
@@ -206,7 +212,9 @@ export async function pairEngineHost(input: Record<string, any>) {
 		lastSyncAt: now,
 		detachedAt: attached ? null : now
 	};
-	const setupState: EngineSetupState = row.configured === true ? 'complete' : attached ? 'required' : setupStateFor(row);
+	const setupState: EngineSetupState = attached
+		? (previousSetupState === 'complete' ? 'complete' : 'required')
+		: previousSetupState;
 	const nextRuntime = {
 		...runtime,
 		engineHostLinked: attached,
@@ -220,6 +228,8 @@ export async function pairEngineHost(input: Record<string, any>) {
 		.from('orbitfs_addons')
 		.update({
 			attached,
+			configured: setupState === 'complete',
+			status: attached ? (setupState === 'complete' ? 'attached' : 'setup_required') : 'detached',
 			config: { ...config, engineHostLink: link },
 			runtime: nextRuntime,
 			updated_at: now
@@ -248,6 +258,7 @@ export async function detachEngineHost(engineIdInput: unknown, actorUserId?: str
 		.from('orbitfs_addons')
 		.update({
 			attached: false,
+			status: 'detached',
 			config: { ...config, engineHostLink: nextLink },
 			runtime: { ...runtime, engineHostLinked: false, lastLinkSyncAt: now },
 			updated_at: now
