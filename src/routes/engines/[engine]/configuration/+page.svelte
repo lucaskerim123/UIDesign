@@ -3,8 +3,9 @@
 	const engine = data.engine;
 	const engineBlocks = engine.id === 'mcp'
 		? [
-			['Transport', '/mcp', 'Engine Host'],
-			['OAuth and client runtime', 'MCP-specific', 'Engine Host'],
+			['Transport', 'https://orbitfsengine.vercel.app/mcp', 'Engine Host'],
+			['OAuth authority', 'https://orbitfs.vercel.app', 'Panel'],
+			['OAuth clients and sessions', 'Shared Supabase runtime state', 'Engine Host'],
 			['Startup/context bundles', 'Shared workspace state', 'Panel + MCP runtime'],
 			['Library and profiles', 'Shared Supabase data', 'Panel']
 		]
@@ -21,6 +22,15 @@
 				['Studio data and normal UI', 'Shared workspace data', 'Panel'],
 				['Library and profiles', 'Shared Supabase data', 'Panel']
 			];
+	const actions = [
+		['First-time setup',`/engines/${engine.id}/setup`,true],
+		['Connections',`/engines/${engine.id}/connections`,false],
+		...(engine.id==='mcp' ? [['OAuth',`/engines/${engine.id}/oauth`,false]] : []),
+		['Runtime',`/engines/${engine.id}/runtime`,false],
+		['Monitoring',`/engines/${engine.id}/monitoring`,false],
+		['Logs',`/engines/${engine.id}/logs`,false],
+		['Diagnostics',`/engines/${engine.id}/diagnostics`,false]
+	];
 </script>
 
 <svelte:head><title>{engine.name} Configuration · OrbitFS Engine Host</title><meta name="robots" content="noindex,nofollow" /></svelte:head>
@@ -46,14 +56,9 @@
 		</section>
 
 		<section class="panel">
-			<div class="panel-head"><div><p class="eyebrow">NEXT ACTIONS</p><h2>Engine configuration flow</h2></div></div>
-			<div class="actions">
-				<a class="primary" href={`/engines/${engine.id}/setup`}>First-time setup</a>
-				<a href={`/engines/${engine.id}/connections`}>Connections</a>
-				<a href={`/engines/${engine.id}/runtime`}>Runtime</a>
-				<a href={`/engines/${engine.id}/diagnostics`}>Diagnostics</a>
-			</div>
-			<p class="note">Deeper engine-specific controls will be added only when their backend behaviour is wired. This page deliberately does not expose placeholder toggles that do nothing.</p>
+			<div class="panel-head"><div><p class="eyebrow">MANAGEMENT</p><h2>Engine configuration flow</h2></div></div>
+			<div class="actions">{#each actions as action}<a class:primary={action[2] === true} href={action[1]}>{action[0]}</a>{/each}</div>
+			<p class="note">Controls are only added here when they have real backend behaviour. Panel data is never cloned into Engine Host.</p>
 		</section>
 	</main>
 </div>
