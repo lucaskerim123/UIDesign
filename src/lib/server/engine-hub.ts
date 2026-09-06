@@ -39,15 +39,21 @@ export async function listEngineHubEngines() {
 		const config = objectValue(row?.config);
 		const setup = objectValue(config.engineSetup);
 		const link = objectValue(config.engineHostLink);
-		const component = license.components?.[String(row?.license_component || engine.component)] || null;
+		const componentId = String(row?.license_component || engine.component);
+		const component = objectValue(license.components?.[componentId]);
 		const licensed = component?.allowed === true && component?.lockedToThisInstallation === true && ['enabled','locked'].includes(String(component?.state || ''));
 		const setupState = setupStateFor(row);
 		return {
 			...engine,
+			component: componentId,
 			registered: Boolean(row),
 			installed: row?.installed === true,
 			attached: row?.attached === true,
 			licensed,
+			licenseState: String(component.state || 'not_included'),
+			licenseAllowed: component.allowed === true,
+			licenseLockedToInstallation: component.lockedToThisInstallation === true,
+			licenseReason: component.reason ? String(component.reason) : licensed ? null : 'not_included',
 			available: row?.available !== false,
 			configured: setupState === 'complete',
 			setupState,
