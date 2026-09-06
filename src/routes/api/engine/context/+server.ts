@@ -1,27 +1,22 @@
 import { json } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
-import { accessibleWorkspaces } from '$lib/server/base-compat';
-import { getEngineHostLink } from '$lib/server/engine-host-link';
+import { engineCatalogAccess } from '$lib/server/engine-access';
+import { listEngineHubEngines } from '$lib/server/engine-hub';
 import { getPanelLicenseSummary } from '$lib/server/license';
-import { getSupabaseAdmin } from '$lib/server/supabase';
+import { visibleWorkspaces } from '$lib/server/workspaces';
 
 export async function GET({ cookies }) {
 	try {
 		const user = await requireUser(cookies);
-		const workspaces = await accessibleWorkspaces(user);
-		const mainWorkspace = workspaces.find((workspace: any) => workspace.is_main) || workspaces[0] || null;
-		const db = getSupabaseAdmin();
-		const { data: addonRows, error } = await db
-			.from('orbitfs_addons')
-			.select('id')
-			.in('id', ['mcp', 'apex', 'studio']);
-		if (error) throw error;
-		const engineIds = (addonRows || []).map((row: any) => String(row.id));
-		const [license, engines] = await Promise.all([
+		const [workspaceRows, license, allEngines] = await Promise.all([
+			visibleWorkspaces(user),
 			getPanelLicenseSummary(),
-			Promise.all(engineIds.map((engineId: string) => getEngineHostLink(engineId)))
+			listEngineHubEngines()
 		]);
-		const linkedPanel = engines.find((engine: any) => engine.panelUrl)?.panelUrl || null;
+		const engines = await engineCatalogAccess(user, allEngines);
+		const mainWorkspace = workspaceRows.find((workspace: any) => workspace.is_main) || workspaceRows[0] || null;
+		const linkedPanel = engines.find((engine: any) => engine.panelUrl)?.panelUrl || 'https://orbitfs.vercel.app';
+
 		return json(
 			{
 				user: {
@@ -39,11 +34,29 @@ export async function GET({ cookies }) {
 					plan: license.plan,
 					licensedTo: license.licensedTo,
 					expiresAt: license.expiresAt,
-					panelUrl: linkedPanel
+					panelUrl: linkedPanel,
+					engineHostUrl: 'https://orbitfsengine.vercel.app'
 				},
 				mainWorkspace,
-				workspaces,
-				engines
+				workspaces: workspaceRows,
+				engines: engines.map((engine: any) => ({
+					id: engine.id,
+					name: engine.name,
+					component: engine.component,
+					installed: engine.installed,
+					attached: engine.attached,
+					licensed: engine.licensed,
+					licenseState: engine.licenseState,
+					licenseReason: engine.licenseReason,
+					linked: engine.linked,
+					setupState: engine.setupState,
+					engineState: engine.engineState,
+					workspaceId: engine.workspaceId,
+					workspaceName: engine.workspaceName,
+					accessWorkspaceCount: engine.accessWorkspaceCount,
+					accessWorkspaceNames: engine.accessWorkspaceNames,
+					transportPath: engine.transportPath
+				}))
 			},
 			{ headers: { 'cache-control': 'no-store' } }
 		);
