@@ -41,6 +41,7 @@ export type CloudMcpIdentity = {
   clientName?: string;
   clientPermissions: { read: boolean; write: boolean };
   workspaceIds: string[];
+  workspaceSnapshot: any[];
   currentWorkspaceId: string | null;
   contextKey: string;
   conversationId: string;
@@ -99,6 +100,7 @@ export async function createCloudMcpIdentity(
     clientName: client?.client_name || undefined,
     clientPermissions,
     workspaceIds,
+    workspaceSnapshot: workspaces,
     currentWorkspaceId: workspaceIds[0] || null,
     contextKey,
     conversationId,
@@ -113,9 +115,15 @@ export function requireWrite(identity: CloudMcpIdentity) {
   if (identity.clientPermissions.write === false) throw err('Write access is disabled for this MCP client', 403, 'CLIENT_WRITE_DISABLED');
 }
 
-export async function accessibleMcpWorkspaces(user: OrbitUser) {
+const MCP_WORKSPACE_CACHE_TTL_MS = 10000;
+const mcpWorkspaceCache = new Map<string, { expiresAt: number; rows: any[] }>();
+
+export async function accessibleMcpWorkspaces(user: OrbitUser, force = false) {
+  const cacheKey = String(user.id);
+  const cached = mcpWorkspaceCache.get(cacheKey);
+  if (!force && cached && cached.expiresAt > Date.now()) return cached.rows;
   const rows: any[] = await visibleWorkspaces(user);
-  return rows.filter((workspace: any) => {
+  const visible = rows.filter((workspace: any) => {
     if (workspace.mcp_system_enabled === false) return false;
     const permissions = workspace.management_permissions || {};
     const role = String(user.role || '').toLowerCase();
@@ -123,10 +131,12 @@ export async function accessibleMcpWorkspaces(user: OrbitUser) {
     if (permissions.mcp_use === false) return false;
     return true;
   });
+  mcpWorkspaceCache.set(cacheKey, { expiresAt: Date.now() + MCP_WORKSPACE_CACHE_TTL_MS, rows: visible });
+  return visible;
 }
 
 export async function chooseWorkspace(identity: CloudMcpIdentity, requested?: string | null) {
-  const rows: any[] = await accessibleMcpWorkspaces(identity.user);
+  const rows: any[] = identity.workspaceSnapshot?.length ? identity.workspaceSnapshot : await accessibleMcpWorkspaces(identity.user);
   const q = String(requested || identity.currentWorkspaceId || '').trim().toLowerCase();
   let selected: any = null;
   if (q) {
@@ -139,7 +149,7 @@ export async function chooseWorkspace(identity: CloudMcpIdentity, requested?: st
       else if (matches.length > 1) return { matches };
     }
   }
-  if (!selected) selected = rows.find((w: any) => String(w.status || '').toLowerCase() === 'active') || rows[0];
+  if (!selected) selected = rows.find((w: any) => w.mcp_ui_enabled !== false && String(w.status || '').toLowerCase() === 'active') || rows.find((w: any) => w.mcp_ui_enabled !== false) || rows.find((w: any) => String(w.status || '').toLowerCase() === 'active') || rows[0];
   if (!selected) throw err('No accessible workspace', 404, 'WORKSPACE_NOT_FOUND');
   identity.currentWorkspaceId = String(selected.id);
   identity.workspaceIds = rows.map((w: any) => String(w.id));
@@ -161,6 +171,7 @@ async function touchCloudSession(identity: CloudMcpIdentity) {
   const { data } = await query;
   const existing = data?.[0] || null;
   if (existing) {
+    if (existing.workspace_id && identity.workspaceIds.includes(String(existing.workspace_id))) identity.currentWorkspaceId = String(existing.workspace_id);
     await db.from('mcp_sessions').update({
       request_count: Number(existing.request_count || 0) + 1,
       last_seen_at: now(),
@@ -399,9 +410,9 @@ export async function loadFolderIntoContext(identity: CloudMcpIdentity, workspac
   return { loaded, errors, receipt, total: loaded.reduce((n, i) => n + Number(i.characters || 0), 0), discoveredCount: paths.length };
 }
 
-async function profileContextItem(identity: CloudMcpIdentity, workspaceId: string, profileId: string, detail = 'standard', extras: any = {}) {
+async function profileContextItem(identity: CloudMcpIdentity, workspaceId: string, profileId: string, detail = 'standard', extras: any = {}, requiredPermission = 'view') {
   const role = await workspaceRole(identity.user, workspaceId);
-  const result: any = await profileKnowledgeProjection(workspaceId, profileId, role, identity.userId, identity.role);
+  const result: any = await profileKnowledgeProjection(workspaceId, profileId, role, identity.userId, identity.role, requiredPermission);
   const profile = result.profile;
   let content = profileMarkdown(profile);
   if (detail === 'summary') content = content.slice(0, 12000);
@@ -439,7 +450,7 @@ export async function viewProfileCloud(identity: CloudMcpIdentity, workspaceId: 
 
 export async function loadProfileIntoContext(identity: CloudMcpIdentity, workspaceId: string, profileId: string, detail = 'standard', extras: any = {}) {
   await chooseWorkspace(identity, workspaceId);
-  const item = await profileContextItem(identity, workspaceId, profileId, detail, extras);
+  const item = await profileContextItem(identity, workspaceId, profileId, detail, extras, 'load_context');
   const receipt = await mergeActiveContext(identity, workspaceId, { files: [item], errors: [] });
   return { item, receipt };
 }
@@ -466,7 +477,7 @@ export async function loadKnowledgeCloud(identity: CloudMcpIdentity, workspaceId
     throw err('Legacy file-backed Library items are compatibility-only and cannot be loaded as canonical knowledge.', 410, 'LIBRARY_FILE_PROVIDER_RETIRED');
   } else if (provider === 'base.profiles') {
     const profileId = String(item.source?.locator?.profileId || '');
-    const profile = await profileContextItem(identity, workspaceId, profileId, 'standard', extras);
+    const profile = await profileContextItem(identity, workspaceId, profileId, 'standard', extras, 'load_context');
     content = profile.content;
   } else {
     const sections = (state.sections || []).filter((s: any) => String(s.itemId) === String(itemId));
@@ -535,7 +546,7 @@ export async function loadContextBundleCloud(identity: CloudMcpIdentity, workspa
       if (entry.attachmentType === 'profile' && entry.profileId) {
         const item = await profileContextItem(identity, workspaceId, String(entry.profileId), 'standard', {
           source: 'profile', bundleId: entry.bundleId, bundleName: entry.bundleName, required: entry.required
-        });
+        }, 'load_context');
         item.content = item.content.slice(0, remaining); item.characters = item.content.length;
         loaded.push(item); remaining -= item.characters;
       } else if (entry.attachmentType === 'knowledge' && entry.knowledgeItemId) {
@@ -649,7 +660,7 @@ export async function runStartupCloud(identity: CloudMcpIdentity, workspaceId: s
   for (const entry of profiles) {
     if (loaded.length >= maxFiles || remaining <= 0) break;
     try {
-      const item = await profileContextItem(identity, workspaceId, entry.profileId, 'standard', entry);
+      const item = await profileContextItem(identity, workspaceId, entry.profileId, 'standard', entry, 'load_context');
       item.content = item.content.slice(0, remaining); item.characters = item.content.length;
       loaded.push(item); remaining -= item.characters;
     } catch (error: any) {
@@ -1020,6 +1031,6 @@ export async function resolveKnowledgeTargetCloud(identity:CloudMcpIdentity,work
 export async function knowledgeLineageCloud(identity:CloudMcpIdentity,workspaceId:string,itemId:string){await chooseWorkspace(identity,workspaceId);const state:any=await readLibrary(workspaceId);const item=(state.items||[]).find((x:any)=>String(x.id)===String(itemId));if(!item)throw err('Knowledge item not found',404,'KNOWLEDGE_ITEM_NOT_FOUND');const links=(state.links||[]).filter((l:any)=>String(l.fromItemId||l.sourceItemId)===String(itemId)||String(l.toItemId||l.targetItemId)===String(itemId));const relatedIds=new Set(links.flatMap((l:any)=>[l.fromItemId||l.sourceItemId,l.toItemId||l.targetItemId]).filter(Boolean).map(String));const nodes=(state.items||[]).filter((x:any)=>relatedIds.has(String(x.id))||String(x.id)===String(itemId));const current=nodes.filter((x:any)=>x.currentTarget===true||['active','final'].includes(String(x.lifecycleState||x.lifecycle)));return{item,nodes,current,links,derivedFrom:links.filter((l:any)=>String(l.fromItemId||l.sourceItemId)===String(itemId)&&String(l.relation||l.type)==='derived_from').map((l:any)=>(state.items||[]).find((x:any)=>String(x.id)===String(l.toItemId||l.targetItemId))).filter(Boolean)};}
 export async function knowledgeImpactCloud(identity:CloudMcpIdentity,workspaceId:string,itemId:string){await chooseWorkspace(identity,workspaceId);const state:any=await readLibrary(workspaceId);const item=(state.items||[]).find((x:any)=>String(x.id)===String(itemId));if(!item)throw err('Knowledge item not found',404,'KNOWLEDGE_ITEM_NOT_FOUND');const links=(state.links||[]).filter((l:any)=>String(l.fromItemId||l.sourceItemId)===String(itemId)||String(l.toItemId||l.targetItemId)===String(itemId));const linkedIds=new Set(links.flatMap((l:any)=>[l.fromItemId||l.sourceItemId,l.toItemId||l.targetItemId]).filter(Boolean).map(String));linkedIds.delete(String(itemId));const linkedItems=(state.items||[]).filter((x:any)=>linkedIds.has(String(x.id)));const usage=(state.usage||[]).filter((u:any)=>String(u.itemId||u.knowledgeItemId)===String(itemId));return{item,affectedCount:linkedItems.length+usage.length,linkedItems,usage,links};}
 
-export async function refreshPermissionsCloud(identity:CloudMcpIdentity){const workspaces=await accessibleMcpWorkspaces(identity.user);identity.workspaceIds=workspaces.map((w:any)=>String(w.id));return{systemRole:identity.role,workspaceRoles:workspaces.map((w:any)=>({workspaceId:w.id,workspaceName:w.name,role:w.permission||w.role||'viewer'})),workspaceIds:identity.workspaceIds};}
+export async function refreshPermissionsCloud(identity:CloudMcpIdentity){const workspaces=await accessibleMcpWorkspaces(identity.user,true);identity.workspaceSnapshot=workspaces;identity.workspaceIds=workspaces.map((w:any)=>String(w.id));if(identity.currentWorkspaceId&&!identity.workspaceIds.includes(identity.currentWorkspaceId))identity.currentWorkspaceId=identity.workspaceIds[0]||null;return{systemRole:identity.role,workspaceRoles:workspaces.map((w:any)=>({workspaceId:w.id,workspaceName:w.name,role:w.permission||w.role||'viewer'})),workspaceIds:identity.workspaceIds};}
 export async function auditSystemCommand(identity:CloudMcpIdentity,eventType:string,details:any={}){const db=getSupabaseAdmin();await db.from('mcp_audit_log').insert({scope_id:identity.currentWorkspaceId||'global',actor_user_id:identity.userId,event_type:eventType,details});}
 export async function systemStatusCloud(identity:CloudMcpIdentity){const db=getSupabaseAdmin();const [runtime,sessions]=await Promise.all([db.from('mcp_runtime_state').select('*').eq('id',1).maybeSingle(),db.from('mcp_sessions').select('*').eq('status','active').order('last_seen_at',{ascending:false}).limit(100)]);return{runtime:runtime.data||null,sessions:sessions.data||[],database:true,filesystem:false,storage:'supabase'};}

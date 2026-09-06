@@ -6,7 +6,7 @@ import widgetHtml from '../ui/widget.html?raw';
 import studioWidgetHtml from '../ui/studio-widget.html?raw';
 import { authenticateMcpAccessToken } from '$lib/server/mcp-oauth';
 import { assertMcpLicensed } from '$lib/server/mcp-cloud';
-import { listContextBundles } from '$lib/server/mcp-workspace-state';
+import { getStartup, getPresets, getPresetMetadata, getPresetBundles, listMcpProjects, projectBundleAssignments, listContextBundles } from '$lib/server/mcp-workspace-state';
 import { getSupabaseAdmin } from '$lib/server/supabase';
 import {
   accessibleMcpWorkspaces, auditSystemCommand, browseWorkspace, chooseWorkspace, clearActiveContext,
@@ -17,7 +17,7 @@ import {
   moveEntryCloud, profileCommandCloud, readFileCloud, readManyCloud, refreshPermissionsCloud,
   reloadChangedContext, removeContextItem, resolveKnowledgeTargetCloud, runStartupCloud,
   searchFilesCloud, searchKnowledgeCloud, systemStatusCloud, unloadContextBundleCloud,
-  uploadChatGptFileCloud, viewProfileCloud, writeFileCloud
+  uploadChatGptFileCloud, viewProfileCloud, writeFileCloud, listProfilesCloud
 } from './mcp-live-cloud';import {
   analyseStudioRouting, appendStudioCloud, buildStudioUiState, createDocumentFromRecord,
   listStudioLinks, manageStudioLink, setStudioModeCloud, studioApprovals, studioSessionCloud,
@@ -50,11 +50,66 @@ function registerResources(server:McpServer){
   };
 }
 
+async function buildStartupUiConfig(identity:any, workspaceId:string, strength:string, projectId:string|undefined, profiles:any) {
+  const [startup, projects] = await Promise.all([getStartup(workspaceId), listMcpProjects(workspaceId)]);
+  const selectedProject = projectId
+    ? projects.find((p:any)=>String(p.id)===String(projectId)) || null
+    : projects.find((p:any)=>(startup.projectIds||[]).map(String).includes(String(p.id))) || null;
+  const scopeId = selectedProject?.id || null;
+  const [presets, presetMetadata, presetBundles] = await Promise.all([
+    getPresets(workspaceId, scopeId), getPresetMetadata(workspaceId, scopeId), getPresetBundles(workspaceId, scopeId)
+  ]);
+  const preset = strength || startup.strength || 'medium';
+  const selectedPreset = presets?.[preset] || {};
+  const byProfile = new Map((profiles.profiles||[]).map((p:any)=>[String(p.id),p]));
+  const byBundle = new Map((profiles.profileBundles||[]).map((b:any)=>[String(b.id),b]));
+  const hydrateBundle = (id:any) => {
+    const bundle:any = byBundle.get(String(id));
+    return bundle ? { ...bundle, profiles:(bundle.profileIds||[]).map((pid:any)=>byProfile.get(String(pid))).filter(Boolean) } : null;
+  };
+  const defaultProfiles = (startup.defaultProfileIds||[]).map((id:any)=>byProfile.get(String(id))).filter(Boolean);
+  const defaultProfileBundles = (startup.defaultProfileBundleIds||[]).map(hydrateBundle).filter(Boolean);
+  const presetProfiles = (selectedPreset.profileIds||[]).map((id:any)=>byProfile.get(String(id))).filter(Boolean);
+  const presetProfileBundles = (selectedPreset.profileBundleIds||[]).map(hydrateBundle).filter(Boolean);
+  const projectBundles = selectedProject ? await projectBundleAssignments(String(selectedProject.id)) : [];
+  const assignedMap = new Map<string,any>();
+  for (const item of [...(presetBundles?.[preset]||[]), ...projectBundles]) assignedMap.set(String(item.bundleId), item);
+  const assignedContextBundles = [...assignedMap.values()];
+  return {
+    startup,
+    projects: projects.map((p:any)=>({id:String(p.id),name:p.name,description:p.description||''})),
+    project: selectedProject,
+    presetMetadata,
+    defaultItems: startup.defaultItems||[],
+    projectItems: selectedProject?.items||[],
+    presetItems: selectedPreset.items||[],
+    assignedBundles: assignedContextBundles,
+    instructions: selectedProject?.instructions || startup.instructions || '',
+    aiBehaviour: selectedProject?.ai_behaviour || startup.aiBehaviour || '',
+    startupSelection:{ defaultItems:startup.defaultItems||[], projectItems:selectedProject?.items||[], presetItems:selectedPreset.items||[], defaultProfiles, defaultProfileBundles, presetProfiles, presetProfileBundles, assignedContextBundles }
+  };
+}
+
+
 async function uiState(identity:any,workspaceId?:string,strength?:string,projectId?:string){
-  const picked:any=await chooseWorkspace(identity,workspaceId);const ws=picked.workspace;
-  const receipt=await getActiveContext(identity,ws.id),changes=await inspectContextChanges(identity,ws.id,receipt);
-  const bundles=await listContextBundles(ws.id).catch(()=>[]);
-  return {workspaceId:ws.id,workspaceName:ws.name,workspaces:picked.workspaces.map((w:any)=>({id:String(w.id),name:w.name,status:w.status||'active',permission:w.permission})),strength:strength||'medium',projectId:projectId||null,context:compactContext(receipt,changes.changedFiles),activeContext:receipt,activeFiles:receipt?.files||[],bundles};
+  const picked:any=await chooseWorkspace(identity,workspaceId),ws=picked.workspace;
+  const [receipt,bundles,profiles]=await Promise.all([
+    getActiveContext(identity,ws.id),
+    listContextBundles(ws.id).catch(()=>[]),
+    listProfilesCloud(identity,ws.id).catch(()=>({enabled:false,profiles:[],profileBundles:[],settings:{},permissions:{},slots:{master:null,additional:null}}))
+  ]);
+  const changes=await inspectContextChanges(identity,ws.id,receipt);
+  const config=strength?await buildStartupUiConfig(identity,ws.id,strength,projectId,profiles).catch(()=>null):null;
+  return {
+    workspaceId:ws.id,workspaceName:ws.name,
+    workspaces:picked.workspaces.map((w:any)=>({id:String(w.id),name:w.name,status:w.status||'active',permission:w.permission})),
+    strength:strength||null,projectId:projectId||config?.project?.id||null,
+    dashboard:{user:{username:identity.username,systemRole:identity.role},workspace:{id:String(ws.id),name:ws.name,status:ws.status||'active',role:ws.permission||ws.role||'viewer'}},
+    context:compactContext(receipt,changes.changedFiles),activeContext:receipt,activeFiles:receipt?.files||[],bundles,
+    profiles:profiles.profiles||[],profileBundles:profiles.profileBundles||[],settings:profiles.settings||{},permissions:profiles.permissions||{},slots:profiles.slots||{master:null,additional:null},
+    profileSystemEnabled:profiles.enabled===true,canWrite:identity.scopes?.has?.('orbitfs:write')&&identity.clientPermissions?.write!==false,
+    ...(config?{config}:{})
+  };
 }
 
 function createServer(identity:any){
@@ -81,8 +136,8 @@ function createServer(identity:any){
   reg('unload_context_bundle','Unload OrbitFS context bundle','Remove a loaded context bundle ownership from active context.',{workspaceId:z.string(),bundleId:z.string()},async(a:any)=>{const receipt=await unloadContextBundleCloud(identity,a.workspaceId,a.bundleId);return textResult('Context bundle unloaded.',{workspaceId:a.workspaceId,bundleId:a.bundleId},{orbitfsUiState:{workspaceId:a.workspaceId,context:compactContext(receipt)}});},destructive);
   reg('list_workspace_entries','Browse OrbitFS workspace','Internal app-only file/folder browser for the embedded picker.',{workspaceId:z.string(),path:z.string().optional()},async(a:any)=>{const entries=await browseWorkspace(identity,a.workspaceId,a.path||'');return textResult(`${entries.length} item${entries.length===1?'':'s'}`,{workspaceId:a.workspaceId,path:a.path||'',entries});},ro,appOnly);
   reg('view_profile','View OrbitFS profile','Display a permitted OrbitFS profile by id or name.',{workspaceId:z.string(),profileId:z.string().optional(),profileName:z.string().optional(),path:z.string().optional()},async(a:any)=>{const ref=a.profileId||a.profileName||a.path;if(!ref)throw new Error('profileId, profileName, or path is required');const r=await viewProfileCloud(identity,a.workspaceId,ref);return contentResult(r.content,{workspaceId:a.workspaceId,receipt:`Profile ${r.profile?.name||ref} loaded.`,profile:r.profile,characters:r.content.length});});
-  reg('list_profiles','List OrbitFS profiles','List profiles available to the current user in a workspace.',{workspaceId:z.string()},async({workspaceId}:any)=>{const r=await import('./mcp-live-cloud').then(m=>m.listProfilesCloud(identity,workspaceId));return textResult(r.profiles.length?r.profiles.map((p:any,i:number)=>`${i+1}. ${p.name} (${p.type||'profile'})`).join('\n'):'No profiles available.',{workspaceId,profileCount:r.profiles.length,profiles:r.profiles});});
-  reg('load_profile','Load OrbitFS profile','Load a permitted profile into the active ChatGPT context.',{workspaceId:z.string(),profileId:z.string(),detail:z.enum(['summary','standard','full']).optional()},async(a:any)=>{const r=await loadProfileIntoContext(identity,a.workspaceId,a.profileId,a.detail||'standard');return textResult(`Loaded profile ${r.item.name}.`,{workspaceId:a.workspaceId,profile:{id:a.profileId,name:r.item.name}},{orbitfsUiState:{workspaceId:a.workspaceId,context:compactContext(r.receipt)}});},rw);
+  reg('list_profiles','List OrbitFS profiles','List profiles available to the current user in a workspace.',{workspaceId:z.string()},async({workspaceId}:any)=>{const r=await listProfilesCloud(identity,workspaceId);return textResult(r.profiles.length?r.profiles.map((p:any,i:number)=>`${i+1}. ${p.name} (${p.type||'profile'})`).join('\n'):'No profiles available.',{workspaceId,profileCount:r.profiles.length,profiles:r.profiles,profileBundles:r.profileBundles||[],settings:r.settings||{},permissions:r.permissions||{},slots:r.slots||{master:null,additional:null}});});
+  reg('load_profile','Load OrbitFS profile','Load a permitted profile into the active ChatGPT context.',{workspaceId:z.string(),profileId:z.string(),detail:z.enum(['summary','standard','full']).optional()},async(a:any)=>{const r=await loadProfileIntoContext(identity,a.workspaceId,a.profileId,a.detail||'standard');return textResult(`Loaded profile ${r.item.profileName}.`,{workspaceId:a.workspaceId,profile:{id:a.profileId,name:r.item.profileName}},{orbitfsUiState:{workspaceId:a.workspaceId,context:compactContext(r.receipt)}});},rw);
   reg('remove_context_file','Remove item from OrbitFS context','Remove one loaded file, profile or knowledge item from active context.',{workspaceId:z.string(),path:z.string()},async(a:any)=>{const r=await removeContextItem(identity,a.workspaceId,a.path);return textResult(`Removed ${a.path} from active context.`,{workspaceId:a.workspaceId},{orbitfsUiState:{workspaceId:a.workspaceId,context:compactContext(r)}});},destructive);
   reg('reload_changed_context','Reload changed OrbitFS context','Reload source files changed since active context was created.',{workspaceId:z.string()},async({workspaceId}:any)=>{const r=await reloadChangedContext(identity,workspaceId);return textResult(`Reloaded ${r.loaded.length} changed item${r.loaded.length===1?'':'s'}.`,{workspaceId,reloadedCount:r.loaded.length,errorCount:r.errors.length},{orbitfsUiState:{workspaceId,context:compactContext(r.receipt)}});},rw);
   reg('clear_context','Clear OrbitFS context','Clear active context metadata for a workspace.',{workspaceId:z.string()},async({workspaceId}:any)=>{await clearActiveContext(identity,workspaceId);return textResult('OrbitFS context cleared.',{workspaceId},{orbitfsUiState:{workspaceId,context:compactContext(null)}});},destructive);  reg('search_files','Search OrbitFS files','Search general workspace files by name, path and optionally text content. This is separate from Library knowledge retrieval.',{workspaceId:z.string().optional(),query:z.string().min(1),path:z.string().optional(),includeContent:z.boolean().optional(),maxResults:z.number().int().positive().max(200).optional()},async(a:any)=>{const p:any=await chooseWorkspace(identity,a.workspaceId),r=await searchFilesCloud(identity,p.workspace.id,a.query,a.path||'',a.includeContent===true,a.maxResults||50);return textResult(r.matches.length?r.matches.map((x:any)=>x.path).join('\n'):'No matching files or folders.',{workspaceId:p.workspace.id,...r});});
@@ -95,6 +150,7 @@ function createServer(identity:any){
   reg('file_info','Get OrbitFS file info','Return current metadata and SHA-256 for one permitted file or folder.',{workspaceId:z.string().optional(),path:z.string(),includeSha256:z.boolean().optional()},async(a:any)=>{const p:any=await chooseWorkspace(identity,a.workspaceId),r=await fileInfoCloud(identity,p.workspace.id,a.path);return textResult(`${r.type}: ${r.path}\n${r.bytes} bytes${r.sha256?`\nSHA-256: ${r.sha256}`:''}`,{workspaceId:p.workspace.id,metadata:r});});
   reg('read_many','Read multiple OrbitFS files','Read multiple permitted general workspace files in one call without adding them to context.',{workspaceId:z.string().optional(),paths:z.array(z.string()).min(1).max(50),maxCharactersPerFile:z.number().int().positive().max(1500000).optional(),maxTotalCharacters:z.number().int().positive().max(3000000).optional(),maxBytesPerFile:z.number().int().positive().max(20971520).optional()},async(a:any)=>{const p:any=await chooseWorkspace(identity,a.workspaceId),loaded:any[]=[],failedFiles:any[]=[],content:any[]=[];let remaining=a.maxTotalCharacters||1500000;for(const filePath of a.paths){if(remaining<=0){failedFiles.push({path:filePath,code:'READ_BUDGET_EXHAUSTED',error:'Total character budget exhausted'});continue;}try{const r:any=await readFileCloud(identity,p.workspace.id,filePath,'text',Math.min(a.maxCharactersPerFile||500000,remaining),a.maxBytesPerFile||20971520),text=String(r.content||'');loaded.push({path:filePath,characters:text.length,truncated:!!r.document?.truncated,...r.metadata});remaining-=text.length;content.push({type:'text' as const,text:`===== ${filePath} =====\n${text}`});}catch(e:any){failedFiles.push({path:filePath,code:e?.code||'READ_FAILED',error:e?.message||String(e)});}}if(!content.length)content.push({type:'text' as const,text:'No files were successfully read.'});return {content,structuredContent:{ok:true,workspaceId:p.workspace.id,requestedCount:a.paths.length,loadedCount:loaded.length,failedCount:failedFiles.length,loaded,failedFiles,charactersRead:loaded.reduce((n:number,x:any)=>n+Number(x.characters||0),0)},_meta:{}};});
   reg('edit_file','Edit OrbitFS file','Safely apply exact text replacements to one permitted UTF-8 file using SHA-256 concurrency protection.',{workspaceId:z.string().optional(),path:z.string(),expectedSha256:z.string().regex(/^[a-fA-F0-9]{64}$/),edits:z.array(z.object({oldText:z.string().min(1),newText:z.string(),expectedOccurrences:z.number().int().positive().max(1000).optional()})).min(1).max(100),dryRun:z.boolean().optional()},async(a:any)=>{const p:any=await chooseWorkspace(identity,a.workspaceId),current:any=await readFileCloud(identity,p.workspace.id,a.path,'text',1500000,20971520);if(String(current.metadata.sha256).toLowerCase()!==String(a.expectedSha256).toLowerCase())throw Object.assign(new Error('File changed since it was read'),{status:409,code:'FILE_VERSION_CONFLICT'});let next=String(current.content||'');const applied:any[]=[];for(const e of a.edits){const count=next.split(e.oldText).length-1,expected=e.expectedOccurrences??1;if(count!==expected)throw Object.assign(new Error(`Expected ${expected} occurrence(s) but found ${count}`),{status:409,code:'EDIT_OCCURRENCE_MISMATCH'});next=next.split(e.oldText).join(e.newText);applied.push({expectedOccurrences:expected,oldCharacters:e.oldText.length,newCharacters:e.newText.length});}if(a.dryRun)return textResult(`Dry run ready: ${applied.length} edit(s) can be applied to ${a.path}.`,{workspaceId:p.workspace.id,dryRun:true,edits:applied,beforeSha256:current.metadata.sha256,beforeBytes:current.metadata.bytes,afterBytes:Buffer.byteLength(next,'utf8')});const saved:any=await writeFileCloud(identity,p.workspace.id,a.path,next,{mode:'update',encoding:'utf8',expectedSha256:a.expectedSha256,maxBytes:20971520});return textResult(`Applied ${applied.length} edit(s) to ${a.path}.`,{workspaceId:p.workspace.id,dryRun:false,edits:applied,beforeSha256:current.metadata.sha256,afterSha256:saved.metadata.sha256,beforeBytes:current.metadata.bytes,afterBytes:saved.metadata.bytes});},destructive);
+  reg('save_profile_changes','Save OrbitFS profile changes','Update a structured OrbitFS Profile or queue the change for workspace approval when direct edit permission is unavailable.',{workspaceId:z.string(),profileId:z.string(),patch:z.record(z.string(),z.any()),summary:z.string().optional()},async(a:any)=>{const r=await profileCommandCloud(identity,a.workspaceId,'edit',{patch:a.patch},a.profileId,a.summary||'Profile edit requested from ChatGPT');return textResult(r.applied?'Profile changes saved.':'Profile changes queued for approval.',{workspaceId:a.workspaceId,profileId:a.profileId,...r});},rw);
   reg('create_profile','Create OrbitFS profile','Create a new structured Base Profile or queue it for approval when required.',{workspaceId:z.string(),profile:z.record(z.string(),z.any()),summary:z.string().optional()},async(a:any)=>{const r=await profileCommandCloud(identity,a.workspaceId,'create',{profile:a.profile},null,a.summary||'');return textResult(r.applied?'Profile create completed.':'Profile create queued for approval.',{workspaceId:a.workspaceId,...r});},rw);
   reg('archive_profile','Archive OrbitFS profile','Archive a structured Profile using the recoverable profile lifecycle.',{workspaceId:z.string(),profileId:z.string(),summary:z.string().optional()},async(a:any)=>{const r=await profileCommandCloud(identity,a.workspaceId,'archive',{},a.profileId,a.summary||'');return textResult(r.applied?'Profile archive completed.':'Profile archive queued for approval.',{workspaceId:a.workspaceId,profileId:a.profileId,...r});},destructive);
   reg('repair_profiles','Repair or migrate OrbitFS profiles','Normalize structured Profiles to the current cloud schema and repair Profile state.',{workspaceId:z.string(),summary:z.string().optional()},async(a:any)=>{const r=await profileCommandCloud(identity,a.workspaceId,'repair',{},null,a.summary||'');return textResult(r.applied?'Profile repair/migration completed.':'Profile repair queued for approval.',{workspaceId:a.workspaceId,...r});},rw);

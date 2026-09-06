@@ -7,9 +7,11 @@ function mirrorOrbitfsUiState(payload: any) {
 	if (!result || typeof result !== 'object') return payload;
 	const uiState = result?._meta?.orbitfsUiState;
 	if (!uiState || typeof uiState !== 'object') return payload;
+	const existing = result.structuredContent && typeof result.structuredContent === 'object' ? result.structuredContent : {};
 	result.structuredContent = {
-		...(result.structuredContent && typeof result.structuredContent === 'object' ? result.structuredContent : {}),
-		workspaceId: result.structuredContent?.workspaceId ?? uiState.workspaceId,
+		...existing,
+		...uiState,
+		workspaceId: existing.workspaceId ?? uiState.workspaceId,
 		orbitfsUiState: uiState
 	};
 	return payload;

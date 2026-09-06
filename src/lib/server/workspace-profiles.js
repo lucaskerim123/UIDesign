@@ -407,11 +407,20 @@ export async function profileCatalog(workspaceRoot, role, userId, systemRole = '
   const state = await readProfileState(workspaceRoot);
   const permissions = profilePermissions(state, role, userId);
   const profiles = state.enabled && permissions.view
-    ? state.profiles.filter((profile) => canAccessProfile(profile, permissions, userId, role, systemRole)).map((profile) => ({
-        id: profile.id, name: profile.name, type: profile.type, status: profile.status,
-        classification: profile.classification, restricted: Boolean(profile.restricted),
-        srestricted: Boolean(profile.srestricted), updatedAt: profile.updatedAt || null
-      }))
+    ? state.profiles.filter((profile) => canAccessProfile(profile, permissions, userId, role, systemRole)).map((profile) => {
+        const sanitized = sanitizeProfileLabels(profile, permissions);
+        const sections = mergeBaseSections(sanitized.sections);
+        const labels = parseProfileLabelGroups(sections.find((section) => section.id === 'labels') || {});
+        const relationships = sections.find((section) => section.id === 'relationships');
+        return {
+          id: sanitized.id, name: sanitized.name, type: sanitized.type, status: sanitized.status,
+          classification: sanitized.classification, restricted: Boolean(sanitized.restricted),
+          srestricted: Boolean(sanitized.srestricted), labels,
+          relationshipCount: Array.isArray(relationships?.relationships) ? relationships.relationships.length : 0,
+          sectionCount: sections.filter((section) => section?.removed !== true && section?.enabled !== false).length,
+          updatedAt: sanitized.updatedAt || null
+        };
+      })
     : [];
   const visibleIds = new Set(profiles.map((profile) => profile.id));
   const profileBundles = (state.profileBundles || []).map((bundle) => ({
@@ -422,6 +431,7 @@ export async function profileCatalog(workspaceRoot, role, userId, systemRole = '
   return {
     enabled: state.enabled, permissions, profiles, profileBundles,
     settings: state.settings,
+    slots: state.userSlots[userId] ?? { master: null, additional: null },
     roleOverrides: state.roleOverrides || {},
     memberOverrides: state.memberOverrides || {},
     statistics: {
@@ -433,6 +443,7 @@ export async function profileCatalog(workspaceRoot, role, userId, systemRole = '
     }
   };
 }
+
 export async function exportProfileState(workspaceRoot, role, userId, systemRole = 'user') {
   const state = await readProfileState(workspaceRoot);
   requireProfilePermission(state, role, userId, 'export');
@@ -986,14 +997,14 @@ export async function profileContext(workspaceRoot, role, userId, mode = 'summar
   return { enabled: true, mode, settings: state.settings, profiles: profiles.map((profile) => presentProfileForMode(profile, mode)) };
 }
 
-export async function profileKnowledgeProjection(workspaceRoot, profileId, role, userId, systemRole = 'user') {
+export async function profileKnowledgeProjection(workspaceRoot, profileId, role, userId, systemRole = 'user', requiredPermission = 'view') {
   const state = await readProfileState(workspaceRoot);
-  const permissions = requireProfilePermission(state, role, userId, 'view');
+  const permissions = requireProfilePermission(state, role, userId, requiredPermission);
   if (!state.enabled) throw Object.assign(new Error('Workspace Profiles is disabled'), { status: 503 });
   const profile = (state.profiles || []).find((entry) => String(entry.id) === String(profileId));
   if (!profile || !canAccessProfile(profile, permissions, userId, role, systemRole)) throw Object.assign(new Error('Profile is not accessible'), { status: 404 });
   const sanitized = sanitizeProfileLabels(profile, permissions);
-  return { profile: sanitized, permissions: { viewRestricted: permissions.view_restricted === true }, projection: { userId, role, systemRole, profileId: sanitized.id, updatedAt: sanitized.updatedAt || null } };
+  return { profile: sanitized, permissions: { viewRestricted: permissions.view_restricted === true, loadContext: permissions.load_context === true }, projection: { userId, role, systemRole, profileId: sanitized.id, updatedAt: sanitized.updatedAt || null } };
 }
 
 export async function profileModule(workspaceRoot, role, userId, systemRole = 'user') {
