@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
+import { engineAccess } from '$lib/server/engine-access';
 import { getEngineHubEngine, setEngineSetupState } from '$lib/server/engine-hub';
 import { getEngineReadiness } from '$lib/server/engine-readiness';
 import { setAddonEngineMode } from '$lib/server/addon-engine';
@@ -12,7 +13,14 @@ export async function load({ cookies, params }) {
 	const user = await requireUser(cookies);
 	const engine = await getEngineHubEngine(params.engine);
 	if (!engine.registered) throw error(404, 'Engine is not registered');
-	return { user, engine, canManage: canManage(user) };
+	const access = await engineAccess(user, engine.id);
+	if (!access.allowed) throw error(403, 'You do not have workspace permission to use this OrbitFS engine.');
+	return {
+		user,
+		engine,
+		canManage: canManage(user),
+		accessWorkspaces: access.workspaces.map((workspace: any) => ({ id: workspace.id, name: workspace.name, permission: workspace.permission }))
+	};
 }
 
 export const actions = {
