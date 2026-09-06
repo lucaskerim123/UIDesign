@@ -8,6 +8,13 @@ import {
 
 const deny = () => json({ error: 'Not found' }, { status: 404 });
 
+function authorizeSignedPairingRequest(request: Request, rawBody = '') {
+	const timestamp = String(request.headers.get('x-orbitfs-timestamp') || '').trim();
+	const signature = String(request.headers.get('x-orbitfs-signature') || '').trim();
+	if (!timestamp || !signature) return false;
+	return authorizeEngineHostRequest(request, rawBody);
+}
+
 function failure(error: any, fallback: string) {
 	return json(
 		{
@@ -19,7 +26,7 @@ function failure(error: any, fallback: string) {
 }
 
 export async function GET({ request, url }) {
-	if (!authorizeEngineHostRequest(request)) return deny();
+	if (!authorizeSignedPairingRequest(request)) return deny();
 	try {
 		const engineId = url.searchParams.get('engine') || url.searchParams.get('engineId') || '';
 		return json(await getEngineHostLink(engineId), { headers: { 'cache-control': 'no-store' } });
@@ -30,7 +37,7 @@ export async function GET({ request, url }) {
 
 export async function POST({ request }) {
 	const rawBody = await request.text();
-	if (!authorizeEngineHostRequest(request, rawBody)) return deny();
+	if (!authorizeSignedPairingRequest(request, rawBody)) return deny();
 	try {
 		const body = rawBody ? JSON.parse(rawBody) : {};
 		const action = String(body.action || 'pair').trim().toLowerCase();
@@ -50,7 +57,7 @@ export async function POST({ request }) {
 }
 
 export async function DELETE({ request, url }) {
-	if (!authorizeEngineHostRequest(request)) return deny();
+	if (!authorizeSignedPairingRequest(request)) return deny();
 	try {
 		const engineId = url.searchParams.get('engine') || url.searchParams.get('engineId') || '';
 		const actorUserId = url.searchParams.get('actorUserId');
