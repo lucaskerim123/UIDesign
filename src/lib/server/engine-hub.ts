@@ -37,6 +37,7 @@ export async function listEngineHubEngines() {
 		const row: any = byId.get(engine.id) || null;
 		const runtime = objectValue(row?.runtime);
 		const config = objectValue(row?.config);
+		const setup = objectValue(config.engineSetup);
 		const link = objectValue(config.engineHostLink);
 		const component = license.components?.[String(row?.license_component || engine.component)] || null;
 		const licensed = component?.allowed === true && component?.lockedToThisInstallation === true && ['enabled','locked'].includes(String(component?.state || ''));
@@ -51,6 +52,8 @@ export async function listEngineHubEngines() {
 			configured: setupState === 'complete',
 			setupState,
 			setupVersion: Number(runtime.setupVersion || 1),
+			configurationReviewedAt: setup.configurationReviewedAt || null,
+			configurationReviewedByUserId: setup.configurationReviewedByUserId || null,
 			engineState: String(runtime.engineMode || 'standby'),
 			linked: runtime.engineHostLinked === true && link.state === 'linked',
 			panelUrl: link.panelUrl || runtime.panelUrl || null,
@@ -86,11 +89,46 @@ export async function setEngineSetupState(engineId: string, setupState: EngineSe
 	const now = new Date().toISOString();
 	const configured = setupState === 'complete';
 	const setup = { ...objectValue(config.engineSetup), state: setupState, version: Number(runtime.setupVersion || 1), updatedAt: now, updatedByUserId: actorUserId };
+	if (setupState === 'required' || setupState === 'not_started') {
+		setup.configurationReviewedAt = null;
+		setup.configurationReviewedByUserId = null;
+	}
 	const { error } = await db.from('orbitfs_addons').update({
 		configured,
 		status: row.attached ? (configured ? 'attached' : 'setup_required') : 'detached',
 		config: { ...config, engineSetup: setup },
 		runtime: { ...runtime, setupState, setupVersion: setup.version, lastSetupAt: now, lastSetupBy: actorUserId },
+		updated_at: now
+	}).eq('id', engine.id);
+	if (error) throw error;
+	return getEngineHubEngine(engine.id);
+}
+
+export async function markEngineConfigurationReviewed(engineId: string, actorUserId: string) {
+	const engine = knownEngine(engineId);
+	if (!engine) throw Object.assign(new Error('Unknown engine'), { status: 404, code: 'ENGINE_NOT_FOUND' });
+	const db = getSupabaseAdmin();
+	const { data: row, error: readError } = await db.from('orbitfs_addons').select('runtime,config,installed,attached').eq('id', engine.id).maybeSingle();
+	if (readError) throw readError;
+	if (!row) throw Object.assign(new Error('Engine is not registered'), { status: 404, code: 'ENGINE_NOT_REGISTERED' });
+	if (row.installed !== true || row.attached !== true) throw Object.assign(new Error('Attach the engine from Panel before reviewing setup configuration'), { status: 409, code: 'ENGINE_NOT_ATTACHED' });
+	const runtime = objectValue(row.runtime);
+	const config = objectValue(row.config);
+	const now = new Date().toISOString();
+	const setup = {
+		...objectValue(config.engineSetup),
+		state: setupStateFor(row) === 'complete' ? 'complete' : 'in_progress',
+		version: Number(runtime.setupVersion || 1),
+		configurationReviewedAt: now,
+		configurationReviewedByUserId: actorUserId,
+		updatedAt: now,
+		updatedByUserId: actorUserId
+	};
+	const { error } = await db.from('orbitfs_addons').update({
+		configured: setup.state === 'complete',
+		status: setup.state === 'complete' ? 'attached' : 'setup_required',
+		config: { ...config, engineSetup: setup },
+		runtime: { ...runtime, setupState: setup.state, setupVersion: setup.version, lastSetupAt: now, lastSetupBy: actorUserId },
 		updated_at: now
 	}).eq('id', engine.id);
 	if (error) throw error;
