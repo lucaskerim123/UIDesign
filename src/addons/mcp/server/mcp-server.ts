@@ -37,9 +37,9 @@ const asError=(error:any)=>({content:[{type:'text' as const,text:String(error?.m
 const requireAdmin=(identity:any)=>{if(!['owner','admin'].includes(String(identity.role||'').toLowerCase()))throw Object.assign(new Error('System Owner or Admin required'),{status:403,code:'SYSTEM_ROLE_REQUIRED'});};
 
 function registerResources(server:McpServer){
-  const home='ui://orbitfs/home-v7.html', studio='ui://orbitfs/studio-v8.html';
+  const home='ui://orbitfs/home-v8.html', studio='ui://orbitfs/studio-v8.html';
   const homeMeta:any={ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:[]}},'openai/widgetDescription':'OrbitFS workspace files, context and upload controls','openai/widgetPrefersBorder':true};
-  registerAppResource(server,'OrbitFS Home',home,{description:'OrbitFS workspace files, context and upload controls',mimeType:RESOURCE_MIME_TYPE,_meta:homeMeta},async()=>({contents:[{uri:home,mimeType:RESOURCE_MIME_TYPE,text:widgetHtml,_meta:homeMeta}]}));  const studioMeta:any={ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:[]}},'openai/widgetDescription':'OrbitFS Studio chat-first writing and documentation','openai/widgetPrefersBorder':true};
+  for(const uri of [home,'ui://orbitfs/home-v7.html']) registerAppResource(server,'OrbitFS Home',uri,{description:'OrbitFS workspace files, context and upload controls',mimeType:RESOURCE_MIME_TYPE,_meta:homeMeta},async()=>({contents:[{uri,mimeType:RESOURCE_MIME_TYPE,text:widgetHtml,_meta:homeMeta}]}));  const studioMeta:any={ui:{prefersBorder:true,csp:{connectDomains:[],resourceDomains:[]}},'openai/widgetDescription':'OrbitFS Studio chat-first writing and documentation','openai/widgetPrefersBorder':true};
   for(const uri of [studio,'ui://orbitfs/studio-v7.html','ui://orbitfs/studio-v6.html','ui://orbitfs/studio-v5.html','ui://orbitfs/studio-v4.html']){
     registerAppResource(server,'OrbitFS Studio',uri,{description:'OrbitFS Studio chat-first writing and documentation',mimeType:RESOURCE_MIME_TYPE,_meta:studioMeta},async()=>({contents:[{uri,mimeType:RESOURCE_MIME_TYPE,text:studioWidgetHtml,_meta:studioMeta}]}));
   }
@@ -92,7 +92,14 @@ async function buildStartupUiConfig(identity:any, workspaceId:string, strength:s
 
 
 async function uiState(identity:any,workspaceId?:string,strength?:string,projectId?:string){
-  const picked:any=await chooseWorkspace(identity,workspaceId),ws=picked.workspace;
+  const requested = workspaceId && workspaceId !== 'default' ? workspaceId : undefined;
+  let picked:any=await chooseWorkspace(identity,requested);
+  if (!requested && picked.workspace?.mcp_ui_enabled === false) {
+    const preferred = picked.workspaces.find((w:any)=>w.mcp_ui_enabled !== false);
+    if (preferred) picked = await chooseWorkspace(identity,String(preferred.id));
+  }
+  const ws=picked.workspace;
+  const uiWorkspaces=picked.workspaces.filter((w:any)=>w.mcp_ui_enabled !== false);
   const [receipt,bundles,profiles]=await Promise.all([
     getActiveContext(identity,ws.id),
     listContextBundles(ws.id).catch(()=>[]),
@@ -102,7 +109,7 @@ async function uiState(identity:any,workspaceId?:string,strength?:string,project
   const config=strength?await buildStartupUiConfig(identity,ws.id,strength,projectId,profiles).catch(()=>null):null;
   return {
     workspaceId:ws.id,workspaceName:ws.name,
-    workspaces:picked.workspaces.map((w:any)=>({id:String(w.id),name:w.name,status:w.status||'active',permission:w.permission})),
+    workspaces:uiWorkspaces.map((w:any)=>({id:String(w.id),name:w.name,status:w.status||'active',permission:w.permission})),
     strength:strength||null,projectId:projectId||config?.project?.id||null,
     dashboard:{user:{username:identity.username,systemRole:identity.role},workspace:{id:String(ws.id),name:ws.name,status:ws.status||'active',role:ws.permission||ws.role||'viewer'}},
     context:compactContext(receipt,changes.changedFiles),activeContext:receipt,activeFiles:receipt?.files||[],bundles,
