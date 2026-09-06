@@ -11,25 +11,26 @@
 		<div class="crumb"><a href="/engines">Engines</a><span>/</span><a href={`/engines/${engine.id}`}>{engine.name}</a><span>/</span><b>Runtime</b></div>
 	</header>
 	<main>
-		<section class="heading"><div><p class="eyebrow">RUNTIME CONTROL</p><h1>{engine.fullName}</h1><p>Runtime state is separate from setup. Standby keeps the engine available without active work; permitted workspace users can wake Standby engines, while Stop/Restart and administrative state changes remain administrator-only.</p></div><div class:running={engine.engineState === 'running'} class:stopped={engine.engineState === 'stopped'} class="state"><span></span><strong>{engine.engineState}</strong></div></section>
+		<section class="heading"><div><p class="eyebrow">RUNTIME CONTROL</p><h1>{engine.fullName}</h1><p>Runtime state is separate from setup. Standby keeps the engine available without active work; permitted workspace users can wake a fully configured Standby engine, while Stop/Restart and administrative state changes remain administrator-only.</p></div><div class:running={engine.engineState === 'running'} class:stopped={engine.engineState === 'stopped'} class="state"><span></span><strong>{engine.engineState}</strong></div></section>
 
 		{#if form?.error}<div class="alert error">{form.error}</div>{/if}
 		{#if form?.message}<div class="alert success">{form.message}</div>{/if}
 		{#if !engine.linked}<div class="alert warn"><b>Panel link required.</b> Runtime control stays locked until this engine is attached and paired from OrbitFS Panel.</div>{/if}
+		{#if !data.canManage && engine.setupState !== 'complete'}<div class="alert warn"><b>Setup is not complete.</b> An OrbitFS administrator must finish Engine Host setup before workspace users can wake this engine.</div>{/if}
 		{#if !data.canManage && engine.engineState === 'stopped'}<div class="alert warn"><b>Stopped by administration.</b> Workspace users can wake Standby engines, but a fully Stopped engine must be started by an OrbitFS administrator.</div>{/if}
 
 		<section class="stats">
 			<div><small>GENERATION</small><b>{engine.state?.generation || 1}</b><span>Increments after restart.</span></div>
-			<div><small>SETUP</small><b>{engine.setupState.replaceAll('_', ' ')}</b><span>Setup and runtime are independent.</span></div>
+			<div><small>SETUP</small><b>{engine.setupState.replaceAll('_', ' ')}</b><span>{engine.setupState === 'complete' ? 'Ready for workspace use' : 'Administrator setup required'}</span></div>
 			<div><small>LAST REQUEST</small><b>{engine.state?.lastRequestAt || 'None yet'}</b><span>Latest recorded engine request.</span></div>
-			<div><small>YOUR ACCESS</small><b>{data.canManage ? 'Administrator' : `${data.accessWorkspaceCount} workspace${data.accessWorkspaceCount === 1 ? '' : 's'}`}</b><span>{data.canManage ? 'Full runtime control' : 'May wake from Standby'}</span></div>
+			<div><small>YOUR ACCESS</small><b>{data.canManage ? 'Administrator' : `${data.accessWorkspaceCount} workspace${data.accessWorkspaceCount === 1 ? '' : 's'}`}</b><span>{data.canManage ? 'Full runtime control' : 'May wake configured Standby engine'}</span></div>
 		</section>
 
 		<section class="panel">
 			<div class="panel-head"><div><p class="eyebrow">ENGINE STATE</p><h2>Runtime mode</h2></div><span class="pill">{engine.engineState}</span></div>
 			<div class="modes">
 				<div class:active={engine.engineState === 'running'}><strong>Running</strong><p>Engine accepts normal work and requests.</p></div>
-				<div class:active={engine.engineState === 'standby'}><strong>Standby</strong><p>Engine stays available but idle. A permitted workspace user can wake it when needed.</p></div>
+				<div class:active={engine.engineState === 'standby'}><strong>Standby</strong><p>Engine stays available but idle. A permitted workspace user can wake it after setup is complete.</p></div>
 				<div class:active={engine.engineState === 'stopped'}><strong>Stopped</strong><p>Administrative hard stop. Workspace users cannot wake the engine until an administrator starts it again.</p></div>
 			</div>
 			{#if data.canManage}
