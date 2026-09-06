@@ -7,10 +7,10 @@ function objectValue(value: unknown): Record<string, any> {
 	return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
 }
 
-function resolveSetupState(data:any,runtime:Record<string,any>):EngineSetupState {
-	const candidate=String(runtime.setupState||'');
+function resolveSetupState(data:any,runtime:Record<string,any>,config:Record<string,any>):EngineSetupState {
+	const setup=objectValue(config.engineSetup);
+	const candidate=String(runtime.setupState||setup.state||'');
 	if((['not_started','required','in_progress','complete','error'] as string[]).includes(candidate)) return candidate as EngineSetupState;
-	if(data.configured===true) return 'complete';
 	if(data.attached===true) return 'required';
 	return 'not_started';
 }
@@ -24,7 +24,7 @@ export async function getAddonEngineState(addonId:string) {
 	const config=objectValue(data.config);
 	const link=objectValue(config.engineHostLink);
 	const mode=(['running','standby','stopped'] as string[]).includes(String(runtime.engineMode))?String(runtime.engineMode) as EngineMode:'standby';
-	const setupState=resolveSetupState(data,runtime);
+	const setupState=resolveSetupState(data,runtime,config);
 	return {
 		addonId:data.id,
 		name:data.name,
@@ -49,7 +49,7 @@ export async function getAddonEngineState(addonId:string) {
 		database:runtime.database||'supabase',
 		installed:data.installed===true,
 		attached:data.attached===true,
-		configured:data.configured===true,
+		configured:setupState==='complete',
 		available:data.available===true,
 		updatedAt:data.updated_at||null
 	};
@@ -58,6 +58,8 @@ export async function getAddonEngineState(addonId:string) {
 export async function setAddonEngineMode(addonId:string,action:EngineMode|'restart',actor:string|null=null){
 	const db=getSupabaseAdmin();
 	const current=await getAddonEngineState(addonId);
+	if(!current.installed) throw Object.assign(new Error(`OrbitFS ${addonId} engine is not installed`),{status:409,code:'ENGINE_NOT_INSTALLED'});
+	if(!current.attached || !current.linked) throw Object.assign(new Error(`OrbitFS ${addonId} engine is not attached to Panel`),{status:409,code:'ENGINE_NOT_ATTACHED'});
 	const now=new Date().toISOString();
 	const nextMode:EngineMode=action==='restart'?'running':action;
 	const {data:row,error:readError}=await db.from('orbitfs_addons').select('runtime').eq('id',addonId).maybeSingle();
@@ -90,6 +92,7 @@ export async function noteAddonRequest(addonId:string){
 
 export async function assertAddonEngineAccepting(addonId:string){
 	const state=await getAddonEngineState(addonId);
+	if(!state.installed || !state.attached || !state.linked) throw Object.assign(new Error(`OrbitFS ${addonId} engine is not attached`),{status:503,code:'ENGINE_NOT_ATTACHED'});
 	if(state.mode==='stopped') throw Object.assign(new Error(`OrbitFS ${addonId} engine is stopped`),{status:503,code:'ENGINE_STOPPED'});
 	return state;
 }
