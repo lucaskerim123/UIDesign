@@ -18,7 +18,7 @@ export async function load({ cookies, params }) {
 		user,
 		engine,
 		canManage: canManage(user),
-		canWake: access.allowed && engine.engineState === 'standby',
+		canWake: access.allowed && engine.setupState === 'complete' && engine.engineState === 'standby',
 		accessWorkspaceCount: access.workspaces.length
 	};
 }
@@ -39,6 +39,7 @@ export const actions = {
 
 		if (!admin) {
 			if (action !== 'running') return fail(403, { error: 'Only an OrbitFS administrator can change this runtime mode.' });
+			if (engine.setupState !== 'complete') return fail(409, { error: 'Engine setup must be completed by an administrator before workspace users can wake it.' });
 			if (engine.engineState === 'stopped') return fail(409, { error: 'This engine was stopped by an administrator and cannot be woken by a workspace user.' });
 			if (engine.engineState !== 'standby') return { ok: true, message: `Runtime is already ${engine.engineState}.` };
 		}
