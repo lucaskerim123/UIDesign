@@ -12,6 +12,15 @@ function objectValue(value: unknown): Record<string, any> {
 	return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
 }
 
+function setupStateFor(row: any): EngineSetupState {
+	const runtime = objectValue(row?.runtime);
+	const config = objectValue(row?.config);
+	const setup = objectValue(config.engineSetup);
+	const state = String(runtime.setupState || setup.state || '');
+	if (['not_started','required','in_progress','complete','error'].includes(state)) return state as EngineSetupState;
+	return row?.attached ? 'required' : 'not_started';
+}
+
 export function knownEngine(id: string) {
 	return ENGINE_CATALOG.find((engine) => engine.id === id.toLowerCase()) || null;
 }
@@ -31,7 +40,7 @@ export async function listEngineHubEngines() {
 		const link = objectValue(config.engineHostLink);
 		const component = license.components?.[String(row?.license_component || engine.component)] || null;
 		const licensed = component?.allowed === true && component?.lockedToThisInstallation === true && ['enabled','locked'].includes(String(component?.state || ''));
-		const setupState = String(runtime.setupState || (row?.configured ? 'complete' : row?.attached ? 'required' : 'not_started')) as EngineSetupState;
+		const setupState = setupStateFor(row);
 		return {
 			...engine,
 			registered: Boolean(row),
@@ -39,7 +48,7 @@ export async function listEngineHubEngines() {
 			attached: row?.attached === true,
 			licensed,
 			available: row?.available !== false,
-			configured: row?.configured === true,
+			configured: setupState === 'complete',
 			setupState,
 			setupVersion: Number(runtime.setupVersion || 1),
 			engineState: String(runtime.engineMode || 'standby'),
@@ -79,6 +88,7 @@ export async function setEngineSetupState(engineId: string, setupState: EngineSe
 	const setup = { ...objectValue(config.engineSetup), state: setupState, version: Number(runtime.setupVersion || 1), updatedAt: now, updatedByUserId: actorUserId };
 	const { error } = await db.from('orbitfs_addons').update({
 		configured,
+		status: row.attached ? (configured ? 'attached' : 'setup_required') : 'detached',
 		config: { ...config, engineSetup: setup },
 		runtime: { ...runtime, setupState, setupVersion: setup.version, lastSetupAt: now, lastSetupBy: actorUserId },
 		updated_at: now
