@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { getEngineHubEngine } from '$lib/server/engine-hub';
 
 export type EngineReadinessCheck = {
@@ -10,7 +11,39 @@ export type EngineReadinessCheck = {
 
 export async function getEngineReadiness(engineId: string) {
 	const engine: any = await getEngineHubEngine(engineId);
+	const databaseSecret = Boolean(String(env.ORBITFS_DB_SECRET || '').trim());
+	const dedicatedEngineSecret = Boolean(String(env.ORBITFS_ENGINE_SECRET || '').trim());
+	const supabaseReady = Boolean(
+		String(env.SUPABASE_URL || '').trim() &&
+		String(env.SUPABASE_PUBLISHABLE_KEY || '').trim() &&
+		databaseSecret
+	);
+	const pairingReady = dedicatedEngineSecret || databaseSecret;
+
 	const checks: EngineReadinessCheck[] = [
+		{
+			id: 'shared_backend',
+			label: 'Shared OrbitFS backend',
+			description: 'Supabase database access and the OrbitFS database secret are configured for this Engine Host.',
+			ok: supabaseReady,
+			required: true
+		},
+		{
+			id: 'pairing_security',
+			label: 'Panel pairing security',
+			description: 'Engine Host has a server-side secret available to authenticate signed Panel attach and detach requests.',
+			ok: pairingReady,
+			required: true
+		},
+		{
+			id: 'dedicated_pairing_secret',
+			label: 'Dedicated pairing secret',
+			description: dedicatedEngineSecret
+				? 'ORBITFS_ENGINE_SECRET is configured specifically for Panel ↔ Engine Host communication.'
+				: 'Recommended before production: configure ORBITFS_ENGINE_SECRET so pairing does not reuse the database secret fallback.',
+			ok: dedicatedEngineSecret,
+			required: false
+		},
 		{
 			id: 'registered',
 			label: 'Engine registered',
@@ -28,7 +61,7 @@ export async function getEngineReadiness(engineId: string) {
 		{
 			id: 'licensed',
 			label: 'Licence entitlement',
-			description: 'The canonical OrbitFS licence allows this engine on this installation.',
+			description: 'The shared OrbitFS licence allows this engine on this installation.',
 			ok: engine.licensed === true,
 			required: true
 		},
@@ -57,7 +90,7 @@ export async function getEngineReadiness(engineId: string) {
 			id: 'configuration',
 			label: 'Configuration reviewed',
 			description: engine.id === 'mcp'
-				? 'An administrator reviewed MCP connection, OAuth and runtime configuration for this Engine Host.'
+				? 'An administrator reviewed MCP OAuth, connections and runtime configuration.'
 				: `An administrator reviewed the current ${engine.name} Engine Host configuration.`,
 			ok: Boolean(engine.configurationReviewedAt),
 			required: true
@@ -75,7 +108,7 @@ export async function getEngineReadiness(engineId: string) {
 		checks.push({
 			id: 'transport',
 			label: 'MCP transport configured',
-			description: 'The MCP transport remains available at /mcp on this Engine Host.',
+			description: 'The MCP transport is configured at /mcp on this Engine Host.',
 			ok: engine.transportPath === '/mcp',
 			required: true
 		});
