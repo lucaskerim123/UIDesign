@@ -54,6 +54,15 @@ export async function getEngineReadiness(engineId: string) {
 			required: true
 		},
 		{
+			id: 'configuration',
+			label: 'Configuration reviewed',
+			description: engine.id === 'mcp'
+				? 'An administrator reviewed MCP connection, OAuth and runtime configuration for this Engine Host.'
+				: `An administrator reviewed the current ${engine.name} Engine Host configuration.`,
+			ok: Boolean(engine.configurationReviewedAt),
+			required: true
+		},
+		{
 			id: 'runtime',
 			label: 'Runtime available',
 			description: 'The engine runtime is available. It may remain in Standby after setup.',
