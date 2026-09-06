@@ -39,5 +39,21 @@ export async function load({ cookies, params }) {
 		}));
 	}
 
+	const actorIds = [...new Set(logs.map((row:any)=>String(row.actor || '')).filter(Boolean))];
+	const workspaceIds = [...new Set(logs.map((row:any)=>String(row.scope || '')).filter(Boolean))];
+	const [usersResult, workspacesResult] = await Promise.all([
+		actorIds.length ? db.from('orbitfs_users').select('id,username,display_name').in('id', actorIds) : Promise.resolve({ data: [], error: null } as any),
+		workspaceIds.length ? db.from('orbitfs_workspaces').select('id,name').in('id', workspaceIds) : Promise.resolve({ data: [], error: null } as any)
+	]);
+	if (usersResult.error) throw usersResult.error;
+	if (workspacesResult.error) throw workspacesResult.error;
+	const users = new Map((usersResult.data || []).map((row:any)=>[String(row.id), row.display_name || row.username || row.id]));
+	const workspaces = new Map((workspacesResult.data || []).map((row:any)=>[String(row.id), row.name || row.id]));
+	logs = logs.map((row:any)=>({
+		...row,
+		actorName: row.actor ? users.get(String(row.actor)) || 'OrbitFS user' : 'System',
+		scopeName: row.scope ? workspaces.get(String(row.scope)) || 'Workspace' : 'Global'
+	}));
+
 	return { user, engine, logs };
 }
