@@ -1,38 +1,14 @@
-import {bodyOf,cors,reply} from "@/lib/license-api";
-import {authorizeEngineRelease,latestEngineRelease} from "@/lib/engine-release";
-import {getOrbitfsReleaseBundle} from "@/lib/orbitfs-release-bundle";
+import {masterLicenseValidate,masterRequest} from "@/lib/master-api";
 
 export const runtime="nodejs";
-
 export async function POST(req:Request){
   try{
-    const body=await bodyOf(req);
-    const auth=await authorizeEngineRelease(body);
-    if(!auth.ok)return reply({error:auth.error,code:auth.code},auth.status);
-    const release=await latestEngineRelease();
-    const bundle=await getOrbitfsReleaseBundle(release.version).catch(()=>null);
-    return reply({
-      release:{
-        version:release.version,
-        releaseId:release.releaseId,
-        sourceCommit:release.sourceCommit,
-        sha256:release.sha256,
-        size:release.size,
-        fileCount:release.fileCount,
-        downloadUrl:release.downloadUrl,
-        expiresIn:release.expiresIn,
-        projectSettings:release.projectSettings,
-        components:release.components||[],
-        checkpointRequired:release.checkpointRequired!==false,
-        minimumEngineDeployerProtocol:Math.max(1,Number(release.minimumEngineDeployerProtocol||bundle?.minimumEngineDeployerProtocol||1)),
-        distribution:"orbitfs-store-package-v1"
-      },
-      installationId:auth.installationId,
-      entitledComponents:auth.entitled
-    });
-  }catch(e:any){
-    return reply({error:e?.message||"Engine release service failed",code:"ENGINE_RELEASE_SERVICE_ERROR"},500);
-  }
+    const body=await req.json();
+    const auth=await masterLicenseValidate({...body,components:["orbitfs_mcp","orbitfs_apex","orbitfs_studio"],activate:false});
+    const entitled=Object.entries(auth.components||{}).filter(([,v]:any)=>v?.allowed===true).map(([k])=>k);
+    if(!entitled.length)return Response.json({error:"Licence is not entitled to an OrbitFS Engine component",code:"ENGINE_RELEASE_NOT_ENTITLED"},{status:403});
+    const result=await masterRequest(`/api/v1/releases/latest?component=orbitfs_engine&channel=${encodeURIComponent(body?.channel||"stable")}`);
+    return Response.json({release:{...result.release,distribution:"orbitfs-store-package-v1"},installationId:body.installationId||body.installation_id,entitledComponents:entitled});
+  }catch(e:any){return Response.json({error:e.message||"Engine release service failed",code:e.code||"ENGINE_RELEASE_SERVICE_ERROR"},{status:e.status||500})}
 }
-
-export async function OPTIONS(){return new Response(null,{status:204,headers:cors})}
+export async function OPTIONS(){return new Response(null,{status:204})}

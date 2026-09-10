@@ -1,14 +1,31 @@
-const masterUrl=()=>String(process.env.MASTER_API_URL||"").replace(/\/$/,"");
+const base=()=>String(process.env.MASTER_API_URL||"").replace(/\/$/,"");
 const token=()=>String(process.env.MASTER_API_TOKEN||"");
-export async function masterRequest(path:string,init:RequestInit={}){const base=masterUrl();if(!base)throw new Error("MASTER_API_URL is not configured");const headers=new Headers(init.headers);if(init.body&&!headers.has("content-type"))headers.set("content-type","application/json");const t=token();if(t)headers.set("authorization",`Bearer ${t}`);const response=await fetch(`${base}${path}`,{...init,headers,cache:"no-store"});const text=await response.text();let data:any;try{data=JSON.parse(text)}catch{data={error:text||"Master returned an invalid response"}}if(!response.ok)throw Object.assign(new Error(String(data?.error||`Master request failed (${response.status})`)),{status:response.status,data});return data}
-export async function masterValidate(body:any){return masterRequest("/api/v1/license/validate",{method:"POST",body:JSON.stringify(body)})}
-export async function masterIssue(body:any){return masterRequest("/api/v1/license/issue",{method:"POST",body:JSON.stringify(body)})}
-export async function masterControl(licenceId:string,body:any){return masterRequest(`/api/v1/license/${encodeURIComponent(licenceId)}/control`,{method:"POST",body:JSON.stringify(body)})}
-export async function masterReleases(){return masterRequest("/api/v1/releases",{method:"GET"})}
-export async function masterCreateRelease(body:any){return masterRequest("/api/v1/releases",{method:"POST",body:JSON.stringify(body)})}
-export async function masterPublishRelease(id:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/publish`,{method:"POST",body:"{}"})}
-export async function masterControlRelease(id:string,status:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/control`,{method:"POST",body:JSON.stringify({status})})}
-export async function masterUploadReleaseArtifact(id:string,bytes:Buffer,contentType="application/octet-stream"){
-  const base=masterUrl();if(!base)throw new Error("MASTER_API_URL is not configured");const headers=new Headers({"content-type":contentType});const t=token();if(t)headers.set("authorization",`Bearer ${t}`);
-  const response=await fetch(`${base}/api/v1/releases/${encodeURIComponent(id)}/artifact`,{method:"POST",headers,body:new Uint8Array(bytes),cache:"no-store"});const text=await response.text();let data:any;try{data=JSON.parse(text)}catch{data={error:text||"Master returned an invalid response"}}if(!response.ok)throw Object.assign(new Error(String(data?.error||"Master artifact upload failed")),{status:response.status,data});return data;
+
+export async function masterRequest(path:string,init:RequestInit={}){
+  const url=base();
+  if(!url)throw new Error("Master License API is not configured");
+  const headers=new Headers(init.headers);
+  headers.set("authorization",`Bearer ${token()}`);
+  if(!headers.has("content-type")&&init.body)headers.set("content-type","application/json");
+  const response=await fetch(`${url}${path}`,{...init,headers,cache:"no-store"});
+  const text=await response.text();
+  let data:any={};
+  try{data=text?JSON.parse(text):{}}catch{data={error:text||"Master API returned an invalid response"}}
+  if(!response.ok)throw Object.assign(new Error(data?.error||`Master API request failed (${response.status})`),{status:response.status,code:data?.code});
+  return data;
 }
+
+export async function masterLicenseValidate(input:any){
+  return masterRequest("/api/v1/license/validate",{method:"POST",body:JSON.stringify({
+    licenseKey:input.licenseKey||input.license_key,
+    installationId:input.installationId||input.installation_id,
+    components:input.components||null,
+    activate:!!input.activate,
+    deviceName:input.deviceName||null,
+    platform:input.platform||null,
+    appVersion:input.appVersion||null
+  })});
+}
+
+export async function masterHealth(){return masterRequest("/health",{method:"GET"});}
+export async function masterPublicKey(){return masterRequest("/api/v1/license/public-key",{method:"GET"});}

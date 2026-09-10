@@ -1,13 +1,7 @@
-import {cors,reply} from "@/lib/license-api";
-import {masterRequest} from "@/lib/master-api";
+import {masterHealth} from "@/lib/master-api";
 
 export async function GET(){
-  try{
-    const master=await masterRequest("/health");
-    return reply({ok:true,service:"OrbitFS Website → Master",master});
-  }catch(error:any){
-    return reply({ok:false,service:"OrbitFS Website → Master",masterAvailable:false,error:error?.message||"Master unavailable"},502);
-  }
+  try{return Response.json(await masterHealth())}
+  catch(e:any){return Response.json({ok:false,error:e.message||"License Master unavailable",code:e.code||"LICENSE_MASTER_UNAVAILABLE"},{status:e.status||503})}
 }
-
-export async function OPTIONS(){return new Response(null,{status:204,headers:cors})}
+export async function OPTIONS(){return new Response(null,{status:204})}
