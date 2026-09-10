@@ -1,7 +1,7 @@
 import {createClient} from "@supabase/supabase-js";
 import {issueEmailVerification} from "@/lib/email-verification-server";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
 const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const validUsername=(value:string)=>/^[A-Za-z0-9._-]{3,32}$/.test(value);
 

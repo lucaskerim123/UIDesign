@@ -3,8 +3,8 @@ import {createClient} from "@supabase/supabase-js";
 
 export const dynamic="force-dynamic";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 const productPrice=(p:any)=>p.metadata?.free_product?"Free":p.price_cents==null?"View details":new Intl.NumberFormat("en-AU",{style:"currency",currency:p.currency||"AUD",maximumFractionDigits:0}).format(p.price_cents/100);
 const componentOrder:Record<string,number>={base:0,mcp:1,apex:2,studio:3};
 

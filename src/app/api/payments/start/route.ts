@@ -2,8 +2,8 @@ import {NextRequest,NextResponse} from 'next/server';
 import {paymentRuntime,runtimeJson} from '@/lib/paymentRuntime';
 import {orbitfsStoreOrigin} from '@/lib/site-origin';
 
-const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://zekejuprrsurjmwgzexw.supabase.co';
-const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c';
+const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://xwbjfhpgsvsjaykelufa.supabase.co';
+const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
 
 async function rpc(auth:string,name:string,body:any){
  const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SUPABASE_KEY,authorization:auth,'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store'});

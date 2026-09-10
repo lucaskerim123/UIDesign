@@ -1,6 +1,6 @@
 const DEFAULT_STORE_ORIGIN="https://orbitfs.cc";
-const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 
 function normalizeOrigin(value:string){
   try{return new URL(value).origin.replace(/\/$/,"")}catch{return ""}

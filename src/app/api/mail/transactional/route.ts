@@ -3,8 +3,8 @@ import {wrapOrbitFsHtml,wrapOrbitFsText} from "@/lib/mail-branding";
 import {loadMailRuntimeConfig,resolveMailDeliveryIdentity} from "@/lib/mail-config-server";
 import {orbitfsStoreOrigin} from "@/lib/site-origin";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 function render(value:string,vars:Record<string,string>){return String(value||'').replace(/{{\s*([\w.]+)\s*}}/g,(_,k)=>vars[k]??'')}
 async function providerJson(r:Response){const t=await r.text();if(!t)return {};try{return JSON.parse(t)}catch{return {message:t}}}
 async function auth(req:Request){const token=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');if(!token)return null;const db=createClient(url,pub,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false}});const {data:{user}}=await db.auth.getUser(token);if(!user)return null;const [{data:allowed},{data:all}]=await Promise.all([db.rpc('has_permission',{p_permission:'mail.admin.send'}),db.rpc('has_permission',{p_permission:'all'})]);return allowed===true||all===true?{user,db}:null}

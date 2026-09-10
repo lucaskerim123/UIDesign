@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {sendPaidLifecycleForInvoice} from '@/lib/mail-lifecycle-server';
 
-const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://zekejuprrsurjmwgzexw.supabase.co';
+const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://xwbjfhpgsvsjaykelufa.supabase.co';
 
 export async function POST(req:NextRequest){
  try{

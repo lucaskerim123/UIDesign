@@ -1,7 +1,7 @@
 import {createClient} from "@supabase/supabase-js";
 import {sendAutomation} from "@/lib/transactional-server";
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 export async function POST(req:Request){
   const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"");
   if(!token)return Response.json({error:"Unauthorized"},{status:401});

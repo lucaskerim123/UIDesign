@@ -3,8 +3,8 @@ import {wrapOrbitFsHtml,wrapOrbitFsText} from "@/lib/mail-branding";
 import {loadMailRuntimeConfig,resolveMailDeliveryIdentity} from "@/lib/mail-config-server";
 import {orbitfsStoreOrigin} from "@/lib/site-origin";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const pub=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 const render=(v:string,vars:Record<string,string>)=>String(v||"").replace(/{{\s*([\w.]+)\s*}}/g,(_,k)=>vars[k]??"");
 const normalize=(v:string)=>String(v||"").replace(/\\n/g,"\n");
 async function providerJson(r:Response){const t=await r.text();if(!t)return {};try{return JSON.parse(t)}catch{return {message:t}}}

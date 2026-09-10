@@ -1,7 +1,7 @@
 import {createClient} from "@supabase/supabase-js";
 import {createHash} from "crypto";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
 const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const allowedGuestDepartments=new Set(["General Support","Sales Enquiries","Sales"]);
 

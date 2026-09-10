@@ -1,5 +1,5 @@
-const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://zekejuprrsurjmwgzexw.supabase.co';
-const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c';
+const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://xwbjfhpgsvsjaykelufa.supabase.co';
+const SUPABASE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
 export async function userFromToken(token:string){
  const r=await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{apikey:SUPABASE_KEY,authorization:`Bearer ${token}`}});
  if(!r.ok)throw new Error('Unauthorized'); return r.json();

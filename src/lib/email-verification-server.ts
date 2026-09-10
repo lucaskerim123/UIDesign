@@ -3,7 +3,7 @@ import {createClient} from "@supabase/supabase-js";
 import {sendAutomation} from "@/lib/transactional-server";
 import {orbitfsStoreOrigin} from "@/lib/site-origin";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
 const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const service=()=>createClient(url,serviceKey,{auth:{persistSession:false}});
 const hash=(token:string)=>createHash("sha256").update(token).digest("hex");

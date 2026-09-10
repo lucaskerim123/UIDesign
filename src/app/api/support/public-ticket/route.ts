@@ -3,8 +3,8 @@ import {createHash,randomBytes} from "crypto";
 import {sendAutomation} from "@/lib/transactional-server";
 import {orbitfsStoreUrl} from "@/lib/site-origin";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const allowedGuestDepartments=new Set(["General Support","Sales Enquiries","Sales"]);
 const guestLifetimeMs=48*60*60*1000;

@@ -1,7 +1,7 @@
 import {createClient as createSupabaseClient} from "@supabase/supabase-js";
 import {masterValidate,masterIssue,masterControl} from "@/lib/master-api";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
 const key=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 export const licenseDb=()=>createSupabaseClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
 export const cors={"access-control-allow-origin":"*","access-control-allow-headers":"content-type,authorization","access-control-allow-methods":"GET,POST,OPTIONS","cache-control":"no-store"};

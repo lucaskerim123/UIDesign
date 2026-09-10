@@ -2,8 +2,8 @@ import {createClient} from "@supabase/supabase-js";
 import {orbitFsEmailTemplate,sendEmail} from "@/lib/email";
 import {loadMailRuntimeConfig} from "@/lib/mail-config-server";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 async function requireEmailAdmin(req:Request){

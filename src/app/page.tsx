@@ -3,8 +3,8 @@ import {createClient} from "@supabase/supabase-js";
 
 export const dynamic="force-dynamic";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 
 const baseFeatures=[
  {code:"FL",title:"Files & structure",text:"Keep documents, source material and working files organised inside the OrbitFS structure instead of scattering project information between unrelated tools."},

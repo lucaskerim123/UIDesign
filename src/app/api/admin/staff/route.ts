@@ -1,7 +1,7 @@
 import {createClient} from "@supabase/supabase-js";
 
-const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://zekejuprrsurjmwgzexw.supabase.co";
-const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_eRN8I1CeZ6zHu-mxK0Zc7g_yO47io5c";
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const publicKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 
 type Access={permissions?:Record<string,boolean>,is_staff?:boolean,primary_role?:string};
 const allowed=(a:Access|undefined,k:string)=>!!a?.permissions?.all||!!a?.permissions?.[k];
