@@ -21,7 +21,6 @@ const sections:Section[]=[
   {title:"OrbitFS Alert System",description:"Configure alert delivery, composer defaults, safety limits and available alert types.",href:"/admin/settings/alerts",badge:"Alerts",tags:["Types","Delivery","Targeting"]},
   {title:"Outbound Mail",description:"System email behaviour, sender identities, automation and reusable templates.",href:"/admin/settings/outbound-mail",badge:"Messaging",tags:["Senders","Automation","Templates"]},
   {title:"Support settings",description:"Ticket defaults, close/reopen rules, auto-close and customer-facing support content.",href:"/admin/support/settings",badge:"Support",tags:["Tickets","Auto-close","Controls"]},
-  {title:"Licence settings",description:"Licence integration, enforcement, grace periods and customer licence controls.",href:"/admin/licenses/settings",badge:"Licensing",tags:["Integration","Enforcement","Controls"]},
   {title:"Account enforcement",description:"View and manage currently suspended or banned customer accounts, reasons and expiry times.",href:"/admin/settings/enforcement/accounts",badge:"Enforcement",tags:["Suspensions","Bans","Expiry"]}
  ]}
 ];

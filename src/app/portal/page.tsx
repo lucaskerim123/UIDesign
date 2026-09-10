@@ -12,17 +12,16 @@ export default function Portal(){
  const sb=createClient();
  const [d,setD]=useState<any>();
  const [tab,setTab]=useState<ActivityTab>("orders");
- useEffect(()=>{(async()=>{const {data:{user}}=await sb.auth.getUser();if(!user)return;const [p,b,t,o,i,n,l,e,s]=await Promise.all([
+ useEffect(()=>{(async()=>{const {data:{user}}=await sb.auth.getUser();if(!user)return;const [p,b,t,o,i,n,e,s]=await Promise.all([
   sb.from("user_profiles").select("*").eq("id",user.id).single(),
   sb.from("account_balances").select("*").eq("user_id",user.id).single(),
   sb.from("support_tickets").select("*").eq("user_id",user.id).order("updated_at",{ascending:false}).limit(5),
   sb.from("orders").select("*").eq("auth_user_id",user.id).order("created_at",{ascending:false}),
   sb.from("invoices").select("*").eq("auth_user_id",user.id).order("created_at",{ascending:false}).limit(5),
   sb.from("news_posts").select("title,excerpt,published_at").eq("published",true).order("published_at",{ascending:false}).limit(3),
-  sb.from("license_bindings").select("*").eq("auth_user_id",user.id).is("archived_at",null).limit(1),
   sb.from("download_entitlements").select("id").eq("auth_user_id",user.id).eq("status","active"),
   sb.from("app_settings").select("key,value").eq("category","identity")
- ]);const id=Object.fromEntries((s.data||[]).map((x:any)=>[x.key.split(".").pop(),x.value]));setD({user,profile:p.data,balance:b.data,tickets:t.data||[],orders:o.data||[],invoices:i.data||[],news:n.data||[],license:l.data?.[0],downloads:e.data?.length||0,id})})()},[]);
+ ]);const id=Object.fromEntries((s.data||[]).map((x:any)=>[x.key.split(".").pop(),x.value]));setD({user,profile:p.data,balance:b.data,tickets:t.data||[],orders:o.data||[],invoices:i.data||[],news:n.data||[],downloads:e.data?.length||0,id})})()},[]);
  const activeOrders=useMemo(()=>{if(!d)return[];const terminal=new Set(["completed","cancelled","canceled","refunded"]);return d.orders.filter((o:any)=>!terminal.has(String(o.status||"").toLowerCase()))},[d]);
  if(!d)return <section>Loading portal…</section>;
  const portal=d.id.portal_name||"Customer Portal",recentActiveOrders=activeOrders.slice(0,5);
@@ -32,7 +31,6 @@ export default function Portal(){
   <div className="portalOverviewStats">
    <Link href="/portal/settings#wallet" className="portalStatCard"><span className="portalStatIcon">W</span><div><small>WALLET BALANCE</small><strong>{money(d.balance?.available_cents||0)}</strong><span>AUD available</span></div></Link>
    <Link href="/portal/orders" className="portalStatCard"><span className="portalStatIcon">O</span><div><small>ACTIVE ORDERS</small><strong>{activeOrders.length}</strong><span>Current account orders</span></div></Link>
-   <Link href="/portal/licenses" className="portalStatCard"><span className="portalStatIcon">L</span><div><small>LICENCE</small><strong>{d.license?.desired_state||"None"}</strong><span>{d.license?.license_id||"No live licence ID"}</span></div></Link>
    <Link href="/portal/downloads" className="portalStatCard"><span className="portalStatIcon">D</span><div><small>DOWNLOADS</small><strong>{d.downloads}</strong><span>Paid entitlements</span></div></Link>
   </div>
   <div className="portalOverviewGrid">

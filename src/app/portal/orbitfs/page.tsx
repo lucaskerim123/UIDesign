@@ -59,7 +59,7 @@ export default function MyOrbitFS(){
   ];
 
   return <main className="portalOverviewV2">
-    <header className="portalOverviewHero"><div><p className="eyebrow">MY ORBITFS</p><h1>Your OrbitFS deployment</h1><p className="muted">One guided flow for your own Supabase database and your own Vercel Panel.</p></div><Link className="buttonlink secondary" href="/portal/licenses">View licences</Link></header>
+    <header className="portalOverviewHero"><div><p className="eyebrow">MY ORBITFS</p><h1>Your OrbitFS deployment</h1><p className="muted">One guided flow for your own Supabase database and your own Vercel Panel.</p></div></header>
 
     {binding?<>
       <div className="portalOverviewStats">
@@ -102,7 +102,7 @@ export default function MyOrbitFS(){
         </div>
 
         <aside style={sectionGap}>
-          <section className="panel portalQuickActions"><div><p className="eyebrow">YOUR INFRASTRUCTURE</p><h2>Customer owned</h2></div><div className="listrow"><div><b>Supabase</b><span>{install.supabase_project_name||"Not selected"}</span></div><span>{supabaseReady?"Ready":"Waiting"}</span></div><div className="listrow"><div><b>Vercel</b><span>{install.vercel_project_name||vercelConnection?.provider_account_name||"Not connected"}</span></div><span>{vercelApiReady?"Ready":"Waiting"}</span></div>{install.production_url&&<a href={install.production_url} target="_blank" rel="noreferrer"><b>Open OrbitFS</b><span>Launch your deployed Panel</span></a>}<Link href="/portal/licenses"><b>Licence details</b><span>View your OrbitFS licence</span></Link></section>
+          <section className="panel portalQuickActions"><div><p className="eyebrow">YOUR INFRASTRUCTURE</p><h2>Customer owned</h2></div><div className="listrow"><div><b>Supabase</b><span>{install.supabase_project_name||"Not selected"}</span></div><span>{supabaseReady?"Ready":"Waiting"}</span></div><div className="listrow"><div><b>Vercel</b><span>{install.vercel_project_name||vercelConnection?.provider_account_name||"Not connected"}</span></div><span>{vercelApiReady?"Ready":"Waiting"}</span></div>{install.production_url&&<a href={install.production_url} target="_blank" rel="noreferrer"><b>Open OrbitFS</b><span>Launch your deployed Panel</span></a>}</section>
 
           <section className="panel"><div className="panelTitle"><div><p className="eyebrow">MANAGE</p><h2>Installation lifecycle</h2></div></div><p className="muted"><b>Undeploy</b> removes only the Vercel Panel and keeps this registration + Supabase database. <b>Deregister</b> removes the OrbitFS installation record after removing the Panel; your Supabase project/data is still left alone.</p><div className="controllerActions">{install.vercel_project_id&&<button className="secondary" disabled={busy!==""} onClick={()=>void lifecycle("undeploy")}>Undeploy Panel</button>}<button className="secondary" disabled={busy!==""} onClick={()=>void lifecycle("deregister")}>Deregister</button></div></section>
         </aside>
@@ -112,7 +112,7 @@ export default function MyOrbitFS(){
         <details className="panel"><summary className="panelTitle" style={summaryStyle}><div><p className="eyebrow">RELEASES</p><h2>Release history</h2></div><span>{history.length}</span></summary>{history.length?history.map((r:any)=><div className="listrow" key={r.id}><div><b>{r.release_version} · {r.action}</b><span>{r.status} · {r.deployment_url||"deployment record"}</span></div><span>{new Date(r.created_at).toLocaleString()}</span></div>):<p className="muted">No Panel deployments yet.</p>}</details>
         <details className="panel"><summary className="panelTitle" style={summaryStyle}><div><p className="eyebrow">ACTIVITY</p><h2>Setup activity</h2></div><span>{events.length}</span></summary>{events.length?events.slice(0,20).map((e:any)=><div className="listrow" key={e.id}><div><b>{label(e.event_type)}</b><span>{e.message||e.status}</span></div><span>{new Date(e.created_at).toLocaleString()}</span></div>):<p className="muted">No setup activity yet.</p>}</details>
       </div>}
-    </>:<section className="panel"><div className="panelTitle"><div><p className="eyebrow">MY ORBITFS</p><h2>No OrbitFS Base licence</h2><p className="muted">An active OrbitFS Base licence needs to be attached to this account before deployment is available.</p></div></div><Link className="buttonlink" href="/portal/licenses">View licences</Link></section>}
+    </>:<section className="panel"><div className="panelTitle"><div><p className="eyebrow">MY ORBITFS</p><h2>OrbitFS access pending</h2><p className="muted">Licensing and release access are provided by the Master service.</p></div></div></section>}
 
     {msg&&<p className="inlineStatus">{msg}</p>}
   </main>;
