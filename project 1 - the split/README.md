@@ -67,3 +67,31 @@ See `DESIGN_SPEC.md` for the complete rescan-derived specification, route/state 
 ## Run
 
 Open `index.html` directly, or serve the repository with any static HTTP server.
+
+## Current split architecture — 2026-09-10
+
+The current prototype is deliberately split into independent application/service surfaces:
+
+- **Public Store** — public catalogue, purchasing, accounts and commercial entry point.
+- **Customer Panel** — customer-owned experience for licences, the external License Controller and the external Deployer.
+- **Admin Billing** — customer/order/payment/invoice/fulfilment administration. It can request licence operations through the connector but does not own licence state.
+- **Master Licensing** — external authoritative licence service: issue, reissue, validate, bind, control, suspend, terminate, API/runtime and enforcement.
+- **Release System** — external authoritative software delivery service: generate drafts, validate packages, authorise, publish and prepare deployment releases.
+- **Service Connector** — integration boundary between the Store/Customer applications and the external Master services. It is not a shared database.
+- **Audit** — correlated operational history across the boundaries.
+
+### Hard separation
+
+Billing state is not licence state. Licence state is not release state. Publishing a release does not issue a licence. A paid order creates commercial eligibility/fulfilment context; the external Master Licensing service creates and controls the actual licence. The external Release System creates and publishes the package that may be delivered when the customer is entitled.
+
+### Intended flow
+
+`Customer → Public Store → purchase → commercial fulfilment → Service Connector → Master Licensing → licence`
+
+`Customer → Customer Panel → License Controller → Master Licensing`
+
+`Customer → Customer Panel → External Deployer → Release System → customer deployment target`
+
+`Admin Billing → Service Connector → Master Licensing / Release System`
+
+The prototype intentionally keeps these surfaces visually separate so the final product can be implemented as separate applications/services that integrate cleanly rather than as one large Website backend.
