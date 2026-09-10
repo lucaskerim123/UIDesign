@@ -2,6 +2,7 @@ import {createHash,randomBytes} from "node:crypto";
 import {licenseDb} from "@/lib/license-api";
 import {serviceRpc,userFromToken,userRpc} from "@/lib/paymentServer";
 import {getPanelRelease} from "@/lib/panel-release";
+import {masterExecuteDeployment,masterSyncDeployment} from "@/lib/master-api";
 
 const SUPABASE_API="https://api.supabase.com/v1";
 const VERCEL_API="https://api.vercel.com";
@@ -595,20 +596,23 @@ function assertReleaseSchemaCompatible(install:any,release:any){
 export async function deployPanel(install:any,action:DeployAction,version?:string){
   if(action==="rollback")await requireSystem("rollback");else if(action==="update")await requireSystem("update");else await requireSystem("deploy");
   if(!install.database_initialized_at||!install.supabase_project_ref)throw Object.assign(new Error("Initialize the customer's OrbitFS database first"),{status:409});
-  const target=action==="redeploy"?(install.release_version||"latest"):(version||"latest"),release=await getPanelRelease(target);assertReleaseSchemaCompatible(install,release);install=await ensureVercelProject(install);await configureVercel(install);
-  const state=action==="update"||action==="rollback"?"updating":"deploying";await licenseDb().from("orbitfs_installations").update({state,last_error:null,latest_available_release:release.metadata.version}).eq("id",install.id);await event(install,`panel.${action}`,"info",`${action} Panel ${release.metadata.version} in customer Vercel project`);
-  const files=await uploadVercelFiles(install,release.manifest.files),body={name:install.vercel_project_name,project:install.vercel_project_id,target:"production",files,projectSettings:release.manifest.projectSettings||{framework:"sveltekit",buildCommand:"npm run build",installCommand:"npm ci"}};
-  const dep=await vercelApi(install.auth_user_id,"/v13/deployments",{method:"POST",body:JSON.stringify(body)}),url=dep.url?`https://${dep.url}`:null;
-  await licenseDb().from("orbitfs_installation_releases").insert({installation_id:install.id,auth_user_id:install.auth_user_id,release_version:release.metadata.version,release_id:release.metadata.releaseId,release_sha256:release.metadata.sha256,source_commit:release.metadata.sourceCommit,vercel_deployment_id:dep.id||dep.uid,deployment_url:url,action,status:"started"});
-  const {data,error}=await licenseDb().from("orbitfs_installations").update({state,previous_release_version:install.release_version||null,release_version:release.metadata.version,release_id:release.metadata.releaseId,release_sha256:release.metadata.sha256,release_source_commit:release.metadata.sourceCommit,vercel_deployment_id:dep.id||dep.uid,deployment_url:url,last_deployment_at:new Date().toISOString(),last_error:null}).eq("id",install.id).select().single();if(error)throw error;return data;
+  const target=action==="redeploy"?(install.release_version||"latest"):(version||"latest"),release=await getPanelRelease(target);assertReleaseSchemaCompatible(install,release);
+  const vercel=await vercelAccessToken(install.auth_user_id),publishable=await publishableKey(install),dbSecret=await installationSecret(install.id,"db_secret");
+  if(!dbSecret)throw Object.assign(new Error("OrbitFS database secret is missing"),{status:409});
+  const state=action==="update"||action==="rollback"?"updating":"deploying";
+  await licenseDb().from("orbitfs_installations").update({state,last_error:null,latest_available_release:release.metadata.version}).eq("id",install.id);
+  const result=await masterExecuteDeployment({installationId:install.id,userRef:install.auth_user_id,bindingId:install.license_binding_id,releaseId:release.metadata.releaseId,action,actorRef:install.auth_user_id,vercelAccessToken:vercel.token,vercelTeamId:vercel.teamId,vercelProjectId:install.vercel_project_id,vercelProjectName:install.vercel_project_name,env:{SUPABASE_URL:`https://${install.supabase_project_ref}.supabase.co`,SUPABASE_PUBLISHABLE_KEY:publishable,ORBITFS_DB_SECRET:dbSecret}});
+  const r=result.result||result;const patch={state,release_version:release.metadata.version,release_id:release.metadata.releaseId,release_sha256:release.metadata.sha256,release_source_commit:release.metadata.sourceCommit,vercel_project_id:r.projectId||install.vercel_project_id,vercel_project_name:r.projectName||install.vercel_project_name,vercel_deployment_id:r.deploymentId||null,deployment_url:r.deploymentUrl||null,last_deployment_at:new Date().toISOString(),last_error:null};
+  const {data,error}=await licenseDb().from("orbitfs_installations").update(patch).eq("id",install.id).select().single();if(error)throw error;await event(data,`panel.${action}`,"ok",`${action} Panel ${release.metadata.version} submitted by Master deployment service`,r);return data;
 }
 
 export async function syncDeployment(install:any){
   if(!install.vercel_deployment_id)return install;
-  const d=await vercelApi(install.auth_user_id,`/v13/deployments/${encodeURIComponent(install.vercel_deployment_id)}`),state=String(d.readyState||d.status||"").toUpperCase();
-  if(["ERROR","CANCELED"].includes(state)){const msg=d.errorMessage||`Vercel deployment ${state.toLowerCase()}`;await licenseDb().from("orbitfs_installations").update({state:"failed",health_status:"failed",last_error:msg,last_health_at:new Date().toISOString()}).eq("id",install.id);await licenseDb().from("orbitfs_installation_releases").update({status:"failed"}).eq("installation_id",install.id).eq("vercel_deployment_id",install.vercel_deployment_id);await event(install,"panel.failed","error",msg);return {...install,state:"failed",health_status:"failed",last_error:msg}}
+  const vercel=await vercelAccessToken(install.auth_user_id),result=await masterSyncDeployment({vercelAccessToken:vercel.token,vercelTeamId:vercel.teamId,vercelDeploymentId:install.vercel_deployment_id});
+  const state=String(result.state||"").toUpperCase();
+  if(["ERROR","CANCELED"].includes(state)){const msg=result.error||`Vercel deployment ${state.toLowerCase()}`;await licenseDb().from("orbitfs_installations").update({state:"failed",health_status:"failed",last_error:msg,last_health_at:new Date().toISOString()}).eq("id",install.id);await event(install,"panel.failed","error",msg);return {...install,state:"failed",health_status:"failed",last_error:msg}}
   if(state!=="READY")return install;
-  const url=install.production_url||install.deployment_url||(d.url?`https://${d.url}`:null);let healthy=false;
+  const url=install.production_url||install.deployment_url||result.url||null;let healthy=false;
   if(url){try{const s=await releaseSettings(),r=await fetch(new URL(s.health_path||"/api/health",url),{redirect:"follow",cache:"no-store"});healthy=r.status<500}catch{healthy=false}}
-  const patch={state:"ready",health_status:healthy?"healthy":"degraded",last_health_at:new Date().toISOString(),production_url:url,last_error:healthy?null:"Panel deployed but health check did not succeed"},{data,error}=await licenseDb().from("orbitfs_installations").update(patch).eq("id",install.id).select().single();if(error)throw error;await licenseDb().from("orbitfs_installation_releases").update({status:"ready",ready_at:new Date().toISOString()}).eq("installation_id",install.id).eq("vercel_deployment_id",install.vercel_deployment_id);await event(data,"panel.ready",healthy?"ok":"warning",healthy?"OrbitFS Panel is ready in the customer Vercel account":"Panel deployed; health check is degraded",{url});return data;
+  const patch={state:"ready",health_status:healthy?"healthy":"degraded",last_health_at:new Date().toISOString(),production_url:url,last_error:healthy?null:"Panel deployed but health check did not succeed"},{data,error}=await licenseDb().from("orbitfs_installations").update(patch).eq("id",install.id).select().single();if(error)throw error;await event(data,"panel.ready",healthy?"ok":"warning",healthy?"OrbitFS Panel is ready in the customer Vercel account":"Panel deployed; health check is degraded",{url});return data;
 }

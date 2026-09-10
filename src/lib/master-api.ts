@@ -29,3 +29,20 @@ export async function masterLicenseValidate(input:any){
 
 export async function masterHealth(){return masterRequest("/health",{method:"GET"});}
 export async function masterPublicKey(){return masterRequest("/api/v1/license/public-key",{method:"GET"});}
+
+export async function masterExecuteDeployment(input:any){
+  return masterRequest("/api/v1/deployments/execute",{method:"POST",body:JSON.stringify(input)});
+}
+export async function masterSyncDeployment(input:any){
+  return masterRequest("/api/v1/deployments/sync",{method:"POST",body:JSON.stringify(input)});
+}
+export const masterValidate=masterLicenseValidate;
+export async function masterIssue(input:any){return masterRequest("/api/v1/license/issue",{method:"POST",body:JSON.stringify(input)})}
+export async function masterControl(id:string,input:any){return masterRequest(`/api/v1/license/${encodeURIComponent(id)}/control`,{method:"POST",body:JSON.stringify(input)})}
+export async function masterReleases(){return masterRequest("/api/v1/releases",{method:"GET"})}
+export async function masterCreateRelease(input:any){return masterRequest("/api/v1/releases",{method:"POST",body:JSON.stringify(input)})}
+export async function masterPublishRelease(id:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/publish`,{method:"POST"})}
+export async function masterControlRelease(id:string,status:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/control`,{method:"POST",body:JSON.stringify({action:status})})}
+export async function masterUploadReleaseArtifact(id:string,bytes:Buffer,contentType="application/octet-stream"){
+  return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/artifact`,{method:"POST",headers:{"content-type":contentType,"x-artifact-sha256":(await import("node:crypto")).createHash("sha256").update(bytes).digest("hex")},body:new Uint8Array(bytes)});
+}
