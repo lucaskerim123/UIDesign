@@ -1,6 +1,6 @@
-# OrbitFS Master UI
+# OrbitFS Store / Master Services UI
 
-Design/prototype repository for the OrbitFS Website commercial control plane.
+Design/prototype repository for the split OrbitFS Store, Customer Panel, Admin Panel, Master Licensing and Release services.
 
 This repository is intentionally separate from `OrbitFS-Website`. The production repository is **read-only source material for the design project**; the final UI/design work is delivered here.
 
@@ -74,7 +74,7 @@ The current prototype is deliberately split into independent application/service
 
 - **Public Store** — public catalogue, purchasing, accounts and commercial entry point.
 - **Customer Panel** — customer-owned experience for licences, the external License Controller and the external Deployer.
-- **Admin Billing** — customer/order/payment/invoice/fulfilment administration. It can request licence operations through the connector but does not own licence state.
+- **Admin Panel** — customer/order/payment/invoice/fulfilment administration. It can request licence operations through the connector but does not own licence state.
 - **Master Licensing** — external authoritative licence service: issue, reissue, validate, bind, control, suspend, terminate, API/runtime and enforcement.
 - **Release System** — external authoritative software delivery service: generate drafts, validate packages, authorise, publish and prepare deployment releases.
 - **Service Connector** — integration boundary between the Store/Customer applications and the external Master services. It is not a shared database.
@@ -92,6 +92,6 @@ Billing state is not licence state. Licence state is not release state. Publishi
 
 `Customer → Customer Panel → External Deployer → Release System → customer deployment target`
 
-`Admin Billing → Service Connector → Master Licensing / Release System`
+`Admin Panel → Service Connector → Master Licensing / Release System`
 
 The prototype intentionally keeps these surfaces visually separate so the final product can be implemented as separate applications/services that integrate cleanly rather than as one large Website backend.
