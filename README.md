@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OrbitFS Billing Store
 
-## Getting Started
+This repository is the storefront and billing application for OrbitFS. It owns customers, orders, invoices, payments, downloads, and support. The independent OrbitFS License Master remains the only license authority: signing keys and license issuance never belong in this application.
 
-First, run the development server:
+## Local setup
+
+1. Install Node.js 20 or newer.
+2. Copy `.env.example` to `.env.local` and fill in the Supabase and Master values.
+3. Apply the SQL in `database/migrations/` to the Supabase project in order (or use the project’s normal migration workflow).
+4. Install dependencies and run the development server:
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The browser can use the publishable Supabase key. `SUPABASE_SERVICE_ROLE_KEY`, `MASTER_API_TOKEN`, and `CRON_SECRET` are server-only secrets and must not be prefixed with `NEXT_PUBLIC_`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
 
-## Learn More
+## Vercel free-tier deployment
 
-To learn more about Next.js, take a look at the following resources:
+Create a Vercel project linked to this repository, keep the repository root as the project root, and use the Next.js preset with `npm ci` and `npm run build`. Add the variables from `.env.example` to the required Vercel environments. The checked-in `vercel.json` schedules mail reconciliation once per day, which is compatible with Vercel Hobby limits; the endpoint rejects requests unless `CRON_SECRET` is configured and matches the bearer token.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use pull requests for review and merge deployable batches to `main`; do not use incidental agent branches as production deployment targets. Vercel's `ignoreCommand` skips deployments when a push changes only documentation or workflow files. CI is scoped to application changes, runs once per PR/main ref with cancellation for superseded runs, and does not invoke a second Vercel deployment. When several agents are working, batch related changes into one PR before pushing instead of pushing every intermediate commit.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The Store can run while Master is unavailable. License-dependent operations fail closed and report the Master error; the Store never creates or signs licenses locally.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [`VERCEL_DEPLOYMENT.md`](./VERCEL_DEPLOYMENT.md) for the deployment checklist and [`docs/MASTER_SPLIT_ARCHITECTURE.md`](./docs/MASTER_SPLIT_ARCHITECTURE.md) for the authority boundary.
