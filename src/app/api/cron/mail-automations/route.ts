@@ -4,8 +4,9 @@ const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.su
 const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const money=(c:any,currency="AUD")=>new Intl.NumberFormat("en-AU",{style:"currency",currency}).format(Number(c||0)/100);
 export async function GET(req:Request){
-  const auth=req.headers.get("authorization")||"",ua=req.headers.get("user-agent")||"",cronSecret=process.env.CRON_SECRET;
-  if(cronSecret?auth!==`Bearer ${cronSecret}`:!ua.toLowerCase().includes("vercel-cron"))return Response.json({error:"Unauthorized"},{status:401});
+  const auth=req.headers.get("authorization")||"",cronSecret=process.env.CRON_SECRET;
+  if(!cronSecret)return Response.json({error:"CRON_SECRET is not configured."},{status:503});
+  if(auth!==`Bearer ${cronSecret}`)return Response.json({error:"Unauthorized"},{status:401});
   const db=createClient(url,serviceKey,{auth:{persistSession:false}});
   const {data:settings}=await db.from("app_settings").select("key,value").in("key",["invoice.reminder_before_days","invoice.reminder_after_days","invoice.auto_cancel_unpaid_days","mail.automation_reconcile_started_at"]);
   const sm=Object.fromEntries((settings||[]).map((x:any)=>[x.key,x.value])),beforeDays=Number(sm["invoice.reminder_before_days"]??1),afterDays=Number(sm["invoice.reminder_after_days"]??1),cancelDays=Number(sm["invoice.auto_cancel_unpaid_days"]??3),reconcileStart=new Date(String(sm["mail.automation_reconcile_started_at"]||new Date().toISOString())),now=new Date();
