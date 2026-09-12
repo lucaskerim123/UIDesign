@@ -16,10 +16,11 @@ export async function POST(req:Request){
   if(eventKey==="support.ticket.closed"&&ctx.status!=="closed")return Response.json({error:"Ticket is not closed."},{status:409});
   if(eventKey==="support.ticket.reopened"&&ctx.status==="closed")return Response.json({error:"Ticket is not reopened."},{status:409});
   const origin=new URL(req.url).origin;
+  const internalOrigin=(process.env.APP_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co").replace(/\/+$/,"");
   const vars={customer_name:String(ctx.customer_name||"Customer"),ticket_number:String(ctx.ticket_number||""),ticket_subject:String(ctx.subject||""),reply_preview:String(b.replyPreview||"").slice(0,600),ticket_url:ctx.is_guest?`${origin}/support`:`${origin}/portal/support/${ticketId}`};
   const {data:isStaff}=await db.rpc("is_staff");
   if(isStaff){
-    const r=await fetch(`${origin}/api/mail/transactional`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({eventKey,to:String(ctx.email),vars,relatedType:"support_ticket",relatedId:ticketId}),cache:"no-store"});
+    const r=await fetch(`${internalOrigin}/api/mail/transactional`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({eventKey,to:String(ctx.email),vars,relatedType:"support_ticket",relatedId:ticketId}),cache:"no-store"});
     const d=await r.json().catch(()=>({}));return Response.json(d,{status:r.status});
   }
   try{return Response.json(await sendAutomation(eventKey,String(ctx.email),vars,"support_ticket",ticketId))}catch(e:any){return Response.json({error:e?.message||"Support email failed."},{status:502})}
