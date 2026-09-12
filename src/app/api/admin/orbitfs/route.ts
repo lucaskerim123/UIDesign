@@ -20,7 +20,7 @@ export async function GET(req:Request){
       releases,
       latestBase:await latestPanelMetadata("base"),
       latestUpdate:await latestPanelMetadata("update"),
-      settings:{enabled:settings.enabled,customer_deploy_enabled:settings.customer_deploy_enabled,customer_updates_enabled:settings.customer_updates_enabled,customer_rollbacks_enabled:settings.customer_rollbacks_enabled,release_channel:settings.release_channel}
+      settings:{enabled:settings.enabled,customer_deploy_enabled:settings.customer_deploy_enabled,customer_updates_enabled:settings.customer_updates_enabled,customer_rollbacks_enabled:settings.customer_rollbacks_enabled}
     });
   }catch(e){return httpError(e)}
 }
