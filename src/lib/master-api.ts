@@ -17,6 +17,6 @@ export async function masterReleases(){return masterRequest("/api/v1/releases",{
 export async function masterCreateRelease(input:any){return masterRequest("/api/v1/releases",{method:"POST",body:JSON.stringify(input)},"billing");}
 export async function masterPublishRelease(id:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/publish`,{method:"POST"},"billing");}
 export async function masterValidateRelease(id:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/validate`,{method:"POST"},"billing");}
-export async function masterControlRelease(id:string,status:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/control`,{method:"POST",body:JSON.stringify({action:status)},},"billing");}
+export async function masterControlRelease(id:string,status:string){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/control`,{method:"POST",body:JSON.stringify({action:status})},"billing");}
 export async function masterUploadReleaseArtifact(id:string,bytes:Buffer,contentType="application/octet-stream"){return masterRequest(`/api/v1/releases/${encodeURIComponent(id)}/artifact`,{method:"POST",headers:{"content-type":contentType,"x-artifact-sha256":(await import("node:crypto")).createHash("sha256").update(bytes).digest("hex")},body:new Uint8Array(bytes)},"billing");}
 export async function masterDownloadReleaseArtifact(id:string){return masterBinaryRequest(`/api/v1/releases/${encodeURIComponent(id)}/artifact`,{method:"GET"},"billing");}
