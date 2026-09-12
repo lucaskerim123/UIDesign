@@ -2,12 +2,12 @@ name: Store CI
 
 on:
   push:
-    branches: [main, Release_channel]
+    branches: [main]
     paths-ignore:
       - "**.md"
       - "docs/**"
   pull_request:
-    branches: [main, Release_channel]
+    branches: [main]
     paths-ignore:
       - "**.md"
       - "docs/**"
