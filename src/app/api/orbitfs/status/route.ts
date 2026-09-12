@@ -1,4 +1,4 @@
-import {masterRequest} from "@/lib/master-api";
+import {masterIssue,masterRequest} from "@/lib/master-api";
 import {licenseDb} from "@/lib/license-api";
 import {latestPanelMetadata} from "@/lib/panel-release";
 import {httpError,publicReleaseSettings,requireOrbitUser} from "@/lib/orbitfs-deployment";
@@ -11,20 +11,29 @@ function masterBinding(l:any){return {id:String(l.id),license_id:String(l.id),cu
 export async function GET(req:Request){
   try{
     const {user}=await requireOrbitUser(req),db=licenseDb();
-    const [settings,orders,connections,installations,latestBase,latestUpdate,masterLicenses]=await Promise.all([
+    const [settings,orders,legacyBindings,connections,installations,latestBase,latestUpdate,masterLicenses]=await Promise.all([
       publicReleaseSettings(),
       db.from("orders").select("id,order_number").eq("auth_user_id",user.id).order("created_at",{ascending:false}),
+      db.from("license_bindings").select("id,license_product_key,components,label,expires_at,max_installations,metadata,order_id,api_source,desired_state,remote_state,archived_at,created_at,updated_at").eq("auth_user_id",user.id).is("archived_at",null).order("created_at",{ascending:false}),
       db.from("orbitfs_provider_connections").select("id,provider,status,provider_account_id,provider_account_name,team_id,scopes,token_expires_at,connected_at,refreshed_at,last_error,metadata").eq("auth_user_id",user.id),
       db.from("orbitfs_installations").select("*").eq("auth_user_id",user.id).order("created_at",{ascending:false}),
       latestPanelMetadata("base").catch(()=>null),latestPanelMetadata("update").catch(()=>null),
       masterRequest("/api/v1/licenses",{method:"GET"})
     ]);
     if(orders.error)throw orders.error;
+    if(legacyBindings.error)throw legacyBindings.error;
     if(connections.error)throw connections.error;
     if(installations.error)throw installations.error;
     const orderRefs=new Set<string>();for(const o of orders.data||[]){if(o.id)orderRefs.add(String(o.id));if(o.order_number)orderRefs.add(String(o.order_number))}
-    const rawLicenses=Array.isArray(masterLicenses?.licenses)?masterLicenses.licenses:[];
-    const ownedLicenses=rawLicenses.filter((l:any)=>String(l.customer_ref||"")===String(user.id)||orderRefs.has(String(l.order_ref||"")));
+    let rawLicenses=Array.isArray(masterLicenses?.licenses)?masterLicenses.licenses:[];
+    let ownedLicenses=rawLicenses.filter((l:any)=>String(l.customer_ref||"")===String(user.id)||orderRefs.has(String(l.order_ref||"")));
+    if(!ownedLicenses.length&&(legacyBindings.data||[]).length){
+      for(const legacy of legacyBindings.data||[]){
+        const components={...(legacy.components||{})};const key=String(legacy.license_product_key||"").toLowerCase();if(key==="orbitfs_panel")components.orbitfs_base=true;if(key==="orbitfs_sorter")components.orbitfs_apex=true;if(key.startsWith("orbitfs_"))components[key]=true;if(components.orbitfs_apex||components.orbitfs_mcp||components.orbitfs_studio)components.orbitfs_base=true;
+        try{await masterIssue({orderRef:String(legacy.order_id||legacy.id),customerRef:String(user.id),productCode:"orbitfs_base",components,maxInstallations:Number(legacy.max_installations||1),expiresAt:legacy.expires_at||null,metadata:{...(legacy.metadata||{}),migratedFromBillingBinding:String(legacy.id),source:"billing_legacy_migration"}})}catch(e){console.error("OrbitFS legacy License Master migration failed",e)}
+      }
+      const refreshed=await masterRequest("/api/v1/licenses",{method:"GET"});rawLicenses=Array.isArray(refreshed?.licenses)?refreshed.licenses:[];ownedLicenses=rawLicenses.filter((l:any)=>String(l.customer_ref||"")===String(user.id)||orderRefs.has(String(l.order_ref||"")));
+    }
     const bindingRows=ownedLicenses.map(masterBinding).sort((a:any,b:any)=>String(b.created_at||"").localeCompare(String(a.created_at||"")));
     let installationRows=installations.data||[],connectionRows=(connections.data||[]).map((x:any)=>({...x,metadata:{...(x.metadata||{})}}));
     const installByBinding=new Map<string,any>();for(const i of installationRows){const key=String(i.license_binding_id||""),current=installByBinding.get(key);if(!current||installationScore(i)>installationScore(current))installByBinding.set(key,i)}
