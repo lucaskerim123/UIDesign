@@ -1,7 +1,6 @@
 import {createClient} from "@supabase/supabase-js";
+import {masterRequest} from "@/lib/master-api";
 
-const MASTER_URL=String(process.env.MASTER_API_URL||"https://incendiarynetworks.cc").replace(/\/$/,"");
-const MASTER_TOKEN=String(process.env.MASTER_API_TOKEN||"");
 const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
 const ALLOWED_PREFIXES=["/api/v1/licenses","/api/v1/license","/api/v1/products","/api/v1/installations","/api/v1/releases","/api/v1/deployments","/api/v1/settings"];
@@ -20,28 +19,23 @@ async function authorize(req:Request){
   return Boolean(p?.["licenses.view"]||p?.["licenses.manage"]||p?.["license_api.manage"]);
 }
 
-function target(path:string){
-  if(!path.startsWith("/api/"))return null;
-  if(!ALLOWED_PREFIXES.some(x=>path===x||path.startsWith(x+"/")||path.startsWith(x+"?")))return null;
-  return MASTER_URL+path;
-}
+function allowed(path:string){return path.startsWith("/api/")&&ALLOWED_PREFIXES.some(x=>path===x||path.startsWith(x+"/")||path.startsWith(x+"?"));}
 
 export async function GET(req:Request){return forward(req,"GET")}
 export async function POST(req:Request){return forward(req,"POST")}
 export async function PATCH(req:Request){return forward(req,"PATCH")}
 
-async function forward(req:Request,method:string){
+async function forward(req:Request,method:"GET"|"POST"|"PATCH"){
   if(!await authorize(req))return Response.json({error:"Unauthorized"},{status:401});
-  const path=new URL(req.url).searchParams.get("path")||"",url=target(path);
-  if(!url)return Response.json({error:"License Master path is not allowed"},{status:400});
-  if(!MASTER_TOKEN)return Response.json({error:"License Master integration is not configured"},{status:503});
-  const init:RequestInit={method,headers:{authorization:`Bearer ${MASTER_TOKEN}`,accept:"application/json"}};
-  if(method!=="GET")init.body=await req.text();
-  const c=new AbortController(),t=setTimeout(()=>c.abort(),Number(process.env.MASTER_API_TIMEOUT_MS||10000));
+  const path=new URL(req.url).searchParams.get("path")||"";
+  if(!allowed(path))return Response.json({error:"License Master path is not allowed"},{status:400});
+  const role=path.startsWith("/api/v1/deployments")?"deployer":"billing";
   try{
-    const r=await fetch(url,{...init,signal:c.signal}),text=await r.text();
-    return new Response(text,{status:r.status,headers:{"content-type":r.headers.get("content-type")||"application/json","cache-control":"no-store"}});
+    const init:RequestInit={method};
+    if(method!=="GET")init.body=await req.text();
+    const data=await masterRequest(path,init,role);
+    return Response.json(data,{headers:{"cache-control":"no-store"}});
   }catch(e){
-    return Response.json({error:e instanceof Error?e.message:"License Master request failed"},{status:502});
-  }finally{clearTimeout(t)}
+    return Response.json({error:e instanceof Error?e.message:"License Master request failed"},{status:502,headers:{"cache-control":"no-store"}});
+  }
 }
