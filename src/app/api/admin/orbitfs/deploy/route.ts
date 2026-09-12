@@ -1,4 +1,5 @@
-import {deployPanel,httpError,loadInstallation,requireOrbitAdmin,type DeployAction} from "@/lib/orbitfs-deployment";
+import {deployPanel,httpError,loadInstallation,type DeployAction} from "@/lib/orbitfs-deployment";
+import {requireOrbitDeploymentAdmin} from "@/lib/orbitfs-deployment-auth";
 import {reconcileOrbitfsInstallation} from "@/lib/orbitfs-lifecycle";
 import {latestPanelMetadata} from "@/lib/panel-release";
 
@@ -6,7 +7,7 @@ const allowed=new Set<DeployAction>(["deploy","update","rollback","redeploy"]);
 
 export async function POST(req:Request){
   try{
-    await requireOrbitAdmin(req);
+    await requireOrbitDeploymentAdmin(req);
     const body=await req.json().catch(()=>({}));
     const installationId=String(body.installationId||body.installation_id||"").trim();
     const action=String(body.action||"deploy") as DeployAction;
