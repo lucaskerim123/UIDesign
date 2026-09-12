@@ -1,11 +1,47 @@
-import {createClient} from "@/lib/supabase";
+import {createClient} from "@supabase/supabase-js";
 
 const MASTER_URL=String(process.env.MASTER_API_URL||"https://incendiarynetworks.cc").replace(/\/$/,"");
 const MASTER_TOKEN=String(process.env.MASTER_API_TOKEN||"");
-const ALLOWED_PREFIXES=["/api/v1/licenses","/api/v1/license","/api/v1/products","/api/v1/installations","/api/v1/releases","/api/v1/deployments","/api/v1/settings","/api/v1/license/revision"];
-async function authorize(req:Request){const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"").trim();if(!token)return false;const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;if(!url||!key)return false;const sb=createClient(url,key,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false}});const {data,error}=await sb.rpc("get_my_staff_access");if(error||!data)return false;const row=Array.isArray(data)?data[0]:data,permissions=row?.permissions;if(permissions?.all===true)return true;if(Array.isArray(permissions))return permissions.includes("licenses.view")||permissions.includes("licenses.manage")||permissions.includes("license_api.manage");return Boolean(permissions?.["licenses.view"]||permissions?.["licenses.manage"]||permissions?.["license_api.manage"])}
-function target(path:string){if(!path.startsWith("/api/"))return null;if(!ALLOWED_PREFIXES.some(prefix=>path===prefix||path.startsWith(prefix+"/")||path.startsWith(prefix+"?")))return null;return `${MASTER_URL}${path}`}
+const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
+const ALLOWED_PREFIXES=["/api/v1/licenses","/api/v1/license","/api/v1/products","/api/v1/installations","/api/v1/releases","/api/v1/deployments","/api/v1/settings"];
+
+async function authorize(req:Request){
+  const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"").trim();
+  if(!token||!SUPABASE_PUBLISHABLE_KEY)return false;
+  const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{global:{headers:{Authorization:`Bearer ${token}`}},auth:{persistSession:false}});
+  const {data:{user},error:userError}=await sb.auth.getUser(token);
+  if(userError||!user)return false;
+  const {data,error}=await sb.rpc("get_my_staff_access");
+  if(error||!data)return false;
+  const row=Array.isArray(data)?data[0]:data,p=row?.permissions;
+  if(p?.all===true)return true;
+  if(Array.isArray(p))return p.includes("licenses.view")||p.includes("licenses.manage")||p.includes("license_api.manage");
+  return Boolean(p?.["licenses.view"]||p?.["licenses.manage"]||p?.["license_api.manage"]);
+}
+
+function target(path:string){
+  if(!path.startsWith("/api/"))return null;
+  if(!ALLOWED_PREFIXES.some(x=>path===x||path.startsWith(x+"/")||path.startsWith(x+"?")))return null;
+  return MASTER_URL+path;
+}
+
 export async function GET(req:Request){return forward(req,"GET")}
 export async function POST(req:Request){return forward(req,"POST")}
 export async function PATCH(req:Request){return forward(req,"PATCH")}
-async function forward(req:Request,method:string){if(!await authorize(req))return Response.json({error:"Unauthorized"},{status:401});const url=new URL(req.url),path=url.searchParams.get("path")||"",targetUrl=target(path);if(!targetUrl)return Response.json({error:"License Master path is not allowed"},{status:400});if(!MASTER_TOKEN)return Response.json({error:"License Master integration is not configured"},{status:503});const init:RequestInit={method,headers:{authorization:`Bearer ${MASTER_TOKEN}`,accept:"application/json"}};if(method!=="GET")init.body=await req.text();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),Number(process.env.MASTER_API_TIMEOUT_MS||10000));try{const response=await fetch(targetUrl,{...init,signal:controller.signal});const text=await response.text();return new Response(text,{status:response.status,headers:{"content-type":response.headers.get("content-type")||"application/json","cache-control":"no-store"}})}catch(error){return Response.json({error:error instanceof Error?error.message:"License Master request failed"},{status:502})}finally{clearTimeout(timeout)}}
+
+async function forward(req:Request,method:string){
+  if(!await authorize(req))return Response.json({error:"Unauthorized"},{status:401});
+  const path=new URL(req.url).searchParams.get("path")||"",url=target(path);
+  if(!url)return Response.json({error:"License Master path is not allowed"},{status:400});
+  if(!MASTER_TOKEN)return Response.json({error:"License Master integration is not configured"},{status:503});
+  const init:RequestInit={method,headers:{authorization:`Bearer ${MASTER_TOKEN}`,accept:"application/json"}};
+  if(method!=="GET")init.body=await req.text();
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),Number(process.env.MASTER_API_TIMEOUT_MS||10000));
+  try{
+    const r=await fetch(url,{...init,signal:c.signal}),text=await r.text();
+    return new Response(text,{status:r.status,headers:{"content-type":r.headers.get("content-type")||"application/json","cache-control":"no-store"}});
+  }catch(e){
+    return Response.json({error:e instanceof Error?e.message:"License Master request failed"},{status:502});
+  }finally{clearTimeout(t)}
+}
