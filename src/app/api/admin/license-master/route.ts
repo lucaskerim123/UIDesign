@@ -3,7 +3,7 @@ import {masterRequest} from "@/lib/master-api";
 
 const SUPABASE_URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://xwbjfhpgsvsjaykelufa.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"";
-const ALLOWED_PREFIXES=["/api/v1/licenses","/api/v1/license","/api/v1/products","/api/v1/installations","/api/v1/releases","/api/v1/deployments","/api/v1/settings"];
+const ALLOWED_PREFIXES=["/api/v1/licenses","/api/v1/license","/api/v1/products","/api/v1/installations","/api/v1/releases","/api/v1/deployments","/api/v1/settings","/api/release-capture","/api/release-control"];
 
 async function authorize(req:Request){
   const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"").trim();
@@ -18,24 +18,14 @@ async function authorize(req:Request){
   if(Array.isArray(p))return p.includes("licenses.view")||p.includes("licenses.manage")||p.includes("license_api.manage");
   return Boolean(p?.["licenses.view"]||p?.["licenses.manage"]||p?.["license_api.manage"]);
 }
-
 function allowed(path:string){return path.startsWith("/api/")&&ALLOWED_PREFIXES.some(x=>path===x||path.startsWith(x+"/")||path.startsWith(x+"?"));}
-
 export async function GET(req:Request){return forward(req,"GET")}
 export async function POST(req:Request){return forward(req,"POST")}
 export async function PATCH(req:Request){return forward(req,"PATCH")}
-
 async function forward(req:Request,method:"GET"|"POST"|"PATCH"){
   if(!await authorize(req))return Response.json({error:"Unauthorized"},{status:401});
   const path=new URL(req.url).searchParams.get("path")||"";
   if(!allowed(path))return Response.json({error:"License Master path is not allowed"},{status:400});
   const role=path.startsWith("/api/v1/deployments")?"deployer":"billing";
-  try{
-    const init:RequestInit={method};
-    if(method!=="GET")init.body=await req.text();
-    const data=await masterRequest(path,init,role);
-    return Response.json(data,{headers:{"cache-control":"no-store"}});
-  }catch(e){
-    return Response.json({error:e instanceof Error?e.message:"License Master request failed"},{status:502,headers:{"cache-control":"no-store"}});
-  }
+  try{const init:RequestInit={method};if(method!=="GET")init.body=await req.text();const data=await masterRequest(path,init,role);return Response.json(data,{headers:{"cache-control":"no-store"}})}catch(e){return Response.json({error:e instanceof Error?e.message:"License Master request failed"},{status:502,headers:{"cache-control":"no-store"}})}
 }
