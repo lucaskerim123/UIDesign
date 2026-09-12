@@ -1,4 +1,5 @@
-import {deployPanel,httpError,loadInstallation,reconcileOrbitfsInstallation,requireOrbitAdmin,type DeployAction} from "@/lib/orbitfs-deployment";
+import {deployPanel,httpError,loadInstallation,requireOrbitAdmin,type DeployAction} from "@/lib/orbitfs-deployment";
+import {reconcileOrbitfsInstallation} from "@/lib/orbitfs-lifecycle";
 import {latestPanelMetadata} from "@/lib/panel-release";
 
 const allowed=new Set<DeployAction>(["deploy","update","rollback","redeploy"]);
