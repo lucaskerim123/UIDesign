@@ -1,4 +1,4 @@
-const base=()=>String(process.env.MASTER_API_URL||"").replace(/\/$/,"");
+const base=()=>String(process.env.MASTER_API_URL||"https://incendiarynetworks.cc").replace(/\/$/,"");
 const token=()=>String(process.env.MASTER_API_TOKEN||"");
 const timeoutMs=()=>Math.max(1000,Number(process.env.MASTER_API_TIMEOUT_MS||10000));
 
