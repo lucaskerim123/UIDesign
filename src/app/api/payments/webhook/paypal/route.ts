@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {paymentRuntime} from '@/lib/paymentRuntime';
 import {sendPaidLifecycleForInvoice} from '@/lib/mail-lifecycle-server';
 import {orbitfsStoreOrigin} from '@/lib/site-origin';
+import {syncPaidOrderToLicenseMaster} from '@/lib/license-master-sync';
 
 export async function POST(req:NextRequest){
  try{
@@ -12,7 +13,7 @@ export async function POST(req:NextRequest){
   for(const name of names)headers[name]=req.headers.get(name)||'';
   const r=await paymentRuntime('webhook_paypal',{origin,rawBody:raw,headers});
   const text=await r.text();
-  try{const d=JSON.parse(text);if(r.ok&&d?.paid&&d?.invoice_id)await sendPaidLifecycleForInvoice(String(d.invoice_id)).catch(e=>console.error('PayPal webhook lifecycle mail failed',e))}catch{}
+  try{const d=JSON.parse(text);if(r.ok&&d?.paid&&d?.invoice_id){await sendPaidLifecycleForInvoice(String(d.invoice_id)).catch(e=>console.error('PayPal webhook lifecycle mail failed',e));const db=await import('@/lib/supabase');const sb=db.createClient();const {data}=await sb.from('invoices').select('order_id').eq('id',String(d.invoice_id)).maybeSingle();if(data?.order_id)await syncPaidOrderToLicenseMaster(String(data.order_id)).catch(e=>console.error('PayPal License Master sync failed',e));}}catch{}
   return new NextResponse(text,{status:r.status,headers:{'content-type':r.headers.get('content-type')||'application/json'}});
  }catch(e:any){return NextResponse.json({error:e.message||'PayPal webhook failed'},{status:500})}
 }
