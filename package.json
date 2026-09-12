@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "theme:pack": "node tools/theme-manager.mjs pack",
     "theme:install": "node tools/theme-manager.mjs install",
     "theme:install-apply": "node tools/theme-manager.mjs install-apply",

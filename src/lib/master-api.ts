@@ -1,5 +1,6 @@
 const base=()=>String(process.env.MASTER_API_URL||"").replace(/\/$/,"");
 const token=()=>String(process.env.MASTER_API_TOKEN||"");
+const timeoutMs=()=>Math.max(1000,Number(process.env.MASTER_API_TIMEOUT_MS||10000));
 
 export async function masterRequest(path:string,init:RequestInit={}){
   const url=base();
@@ -7,12 +8,21 @@ export async function masterRequest(path:string,init:RequestInit={}){
   const headers=new Headers(init.headers);
   headers.set("authorization",`Bearer ${token()}`);
   if(!headers.has("content-type")&&init.body)headers.set("content-type","application/json");
-  const response=await fetch(`${url}${path}`,{...init,headers,cache:"no-store"});
-  const text=await response.text();
-  let data:any={};
-  try{data=text?JSON.parse(text):{}}catch{data={error:text||"Master API returned an invalid response"}}
-  if(!response.ok)throw Object.assign(new Error(data?.error||`Master API request failed (${response.status})`),{status:response.status,code:data?.code});
-  return data;
+  const controller=init.signal?null:new AbortController();
+  const timer=controller?setTimeout(()=>controller.abort(),timeoutMs()):null;
+  try{
+    const response=await fetch(`${url}${path}`,{...init,headers,cache:"no-store",signal:init.signal||controller?.signal});
+    const text=await response.text();
+    let data:any={};
+    try{data=text?JSON.parse(text):{}}catch{data={error:text||"Master API returned an invalid response"}}
+    if(!response.ok)throw Object.assign(new Error(data?.error||`Master API request failed (${response.status})`),{status:response.status,code:data?.code});
+    return data;
+  }catch(error){
+    if(error instanceof Error&&error.name==="AbortError")throw new Error(`Master API request timed out after ${timeoutMs()}ms`);
+    throw error;
+  }finally{
+    if(timer)clearTimeout(timer);
+  }
 }
 
 export async function masterLicenseValidate(input:any){
