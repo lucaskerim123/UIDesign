@@ -1,6 +1,6 @@
 import {licenseDb} from "@/lib/license-api";
-import {httpError,latestPanelMetadata,releaseSettings,requireOrbitAdmin} from "@/lib/orbitfs-deployment";
-import {listPanelReleases} from "@/lib/panel-release";
+import {httpError,releaseSettings,requireOrbitAdmin} from "@/lib/orbitfs-deployment";
+import {latestPanelMetadata,listPanelReleases} from "@/lib/panel-release";
 
 export async function GET(req:Request){
   try{
